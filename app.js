@@ -1,13 +1,12 @@
 /* ════════════════════════════════════════════════════════════════════
-   EL CONFESIONARIO · Marta & Joaquín — app.js
-   Características:
-   • Modo kiosco con PIN
-   • Almacenamiento en IndexedDB + auto-descarga a la galería
-   • Preview antes de guardar
-   • Solo audio opcional
-   • Sugerencias de preguntas
-   • Wake Lock, auto-reset, animaciones pulidas
-   • Indicador de nivel de audio
+   EL CONFESIONARIO · Marta & Joaquín — app.js  (v2 arreglos)
+   Cambios respecto a v1:
+   • Preview OFF por defecto (flujo directo grabar → guardado → gracias)
+   • Autorreinicio independiente del modo kiosco
+   • Pantalla "mensaje guardado" más prominente y visible más tiempo
+   • Modo kiosco con descripción clara + mínimo 5s autorreinicio
+   • Modo audio más visible (toggle grande + indicador durante grabación)
+   • Preview para audio muestra <audio> en lugar de <video>
 ════════════════════════════════════════════════════════════════════ */
 
 /* ─────────────────────────── State ────────────────────────── */
@@ -46,20 +45,38 @@ const DEFAULT_SETTINGS = {
   mirror: true,
   prompt: true,
   askName: false,
-  preview: true,
+  preview: false,          // v2: OFF por defecto — flujo directo
+  autoReset: true,         // v2: independiente de kiosco
+  autoresetSecs: 15,       // v2: default 15s (antes 45 y dentro de kiosco)
   kiosk: false,
-  autoreset: 45,
   pin: '2468',
   mp4: true,
   names: 'Marta & Joaquín',
-  saveToGallery: true, // Auto-descarga a Descargas → indexado por la galería de Android
+  saveToGallery: true,
 };
-const SETTINGS_KEY = 'confesionario.settings.v2';
+const SETTINGS_KEY = 'confesionario.settings.v3';  // v3 por el cambio de forma
 
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
+    if (!raw) {
+      // migración suave desde v2
+      const v2 = localStorage.getItem('confesionario.settings.v2');
+      if (v2) {
+        try {
+          const parsed = JSON.parse(v2);
+          const migrated = {
+            ...DEFAULT_SETTINGS,
+            ...parsed,
+            preview: false,  // forzar default nuevo
+            autoReset: true,
+            autoresetSecs: Math.max(5, parsed.autoreset || 15),
+          };
+          return migrated;
+        } catch {}
+      }
+      return { ...DEFAULT_SETTINGS };
+    }
     return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -265,13 +282,20 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* ─────────────────────────── Audio-only ───────────────────── */
-function toggleAudioOnly() {
-  state.audioOnly = !state.audioOnly;
+function setAudioOnly(value) {
+  state.audioOnly = !!value;
   const btn = $('audio-only-toggle');
-  btn.classList.toggle('active', state.audioOnly);
-  btn.setAttribute('aria-pressed', String(state.audioOnly));
-  btn.textContent = state.audioOnly ? '🎙 Modo audio activado' : '🎙 Solo audio';
+  if (btn) {
+    btn.classList.toggle('active', state.audioOnly);
+    btn.setAttribute('aria-pressed', String(state.audioOnly));
+    btn.innerHTML = state.audioOnly
+      ? '🎙 <b>Modo audio ACTIVADO</b>'
+      : '🎙 Solo audio (sin vídeo)';
+  }
+  const ind = $('audio-mode-indicator');
+  if (ind) ind.classList.toggle('hidden', !state.audioOnly);
 }
+function toggleAudioOnly() { setAudioOnly(!state.audioOnly); }
 
 /* ─────────────────────────── Permissions / Camera ─────────── */
 async function requestPermissionAndContinue() {
@@ -367,7 +391,6 @@ function beginFlow() {
   else goScreen('permission');
 }
 
-/* ─────────────────────────── Prompts ──────────────────────── */
 function nextPrompt(reset = false) {
   if (reset) state.promptIndex = 0;
   else state.promptIndex = (state.promptIndex + 1) % Math.min(4, PROMPTS.length);
@@ -407,7 +430,7 @@ async function startCountdown() {
 
   const numEl = $('countdown-num');
   const labelEl = $('countdown-label');
-  labelEl.textContent = 'Prepárate…';
+  labelEl.textContent = state.audioOnly ? 'Prepárate · Modo audio' : 'Prepárate…';
   numEl.classList.remove('go');
   let count = 3;
   numEl.textContent = count;
@@ -507,16 +530,33 @@ async function handleRecordingDone() {
 function showPreview(blob) {
   if (state.playerObjectUrl) URL.revokeObjectURL(state.playerObjectUrl);
   state.playerObjectUrl = URL.createObjectURL(blob);
-  const v = $('playback-video');
-  v.src = state.playerObjectUrl;
-  v.load();
-  v.play().catch(() => {});
+
+  // Mostrar contenedor correcto según audio/video
+  const vidC = $('preview-video-container');
+  const audC = $('preview-audio-container');
+  if (state.audioOnly) {
+    if (vidC) vidC.classList.add('hidden');
+    if (audC) audC.classList.remove('hidden');
+    const a = $('playback-audio');
+    a.src = state.playerObjectUrl;
+    a.load();
+    a.play().catch(() => {});
+  } else {
+    if (audC) audC.classList.add('hidden');
+    if (vidC) vidC.classList.remove('hidden');
+    const v = $('playback-video');
+    v.src = state.playerObjectUrl;
+    v.load();
+    v.play().catch(() => {});
+  }
   goScreen('preview');
   releaseWakeLock();
 }
 function rerecord() {
   const v = $('playback-video');
-  v.pause(); v.removeAttribute('src'); v.load();
+  const a = $('playback-audio');
+  try { v.pause(); v.removeAttribute('src'); v.load(); } catch {}
+  try { a.pause(); a.removeAttribute('src'); a.load(); } catch {}
   if (state.playerObjectUrl) { URL.revokeObjectURL(state.playerObjectUrl); state.playerObjectUrl = null; }
   state.lastBlob = null;
   initCamera().then(() => startCountdown())
@@ -524,7 +564,9 @@ function rerecord() {
 }
 async function confirmSave() {
   const v = $('playback-video');
-  v.pause(); v.removeAttribute('src'); v.load();
+  const a = $('playback-audio');
+  try { v.pause(); v.removeAttribute('src'); v.load(); } catch {}
+  try { a.pause(); a.removeAttribute('src'); a.load(); } catch {}
   if (state.playerObjectUrl) { URL.revokeObjectURL(state.playerObjectUrl); state.playerObjectUrl = null; }
   if (!state.lastBlob) { resetToWelcome(); return; }
   await finalizeAndSave(state.lastBlob);
@@ -596,7 +638,6 @@ async function finalizeAndSave(rawBlob) {
     const totalCount = await dbCount();
     localStorage.setItem('confessionCount', totalCount.toString());
 
-    // Auto-descarga a la carpeta Descargas (indexada por la galería de Android / Google Fotos)
     let galleryOk = false;
     if (settings.saveToGallery) {
       try {
@@ -610,8 +651,9 @@ async function finalizeAndSave(rawBlob) {
     setTimeout(() => {
       goScreen('done');
       const galleryMsg = settings.saveToGallery
-        ? (galleryOk ? ' · también en Descargas/Galería' : ' · (no se pudo copiar a Descargas)')
+        ? (galleryOk ? ' · también en la galería de la tablet' : ' · (no se pudo copiar a galería)')
         : '';
+      $('done-subtitle').textContent = guestName ? `¡Gracias, ${guestName}!` : '¡Gracias!';
       $('msg-counter').textContent = `Mensaje nº ${totalCount} guardado en ${ext.toUpperCase()}${galleryMsg}`;
       $('setting-count').textContent = totalCount;
       launchConfetti();
@@ -647,20 +689,29 @@ function resetToWelcome() {
   cancelAutoReset();
   $('progress-bar').style.width = '0%';
   $('timer').classList.remove('warning');
-  if (state.audioOnly) toggleAudioOnly();
+  setAudioOnly(false);
   goScreen('welcome');
 }
+
+/**
+ * Auto-reset ahora es INDEPENDIENTE del modo kiosco.
+ * Se activa si settings.autoReset === true (default), con mínimo 5s.
+ */
 function scheduleAutoReset() {
   cancelAutoReset();
-  if (!settings.kiosk) return;
-  const secs = Math.max(10, Number(settings.autoreset) || 45);
+  if (!settings.autoReset) return;
+  const secs = Math.max(5, Number(settings.autoresetSecs) || 15);
   let remaining = secs;
   const autoEl = $('done-auto');
   autoEl.textContent = `Volviendo al inicio en ${remaining}s…`;
   state.autoResetCountdown = setInterval(() => {
     remaining--;
-    autoEl.textContent = `Volviendo al inicio en ${remaining}s…`;
-    if (remaining <= 0) clearInterval(state.autoResetCountdown);
+    if (remaining > 0) {
+      autoEl.textContent = `Volviendo al inicio en ${remaining}s…`;
+    } else {
+      clearInterval(state.autoResetCountdown);
+      state.autoResetCountdown = null;
+    }
   }, 1000);
   state.autoResetTimer = setTimeout(() => {
     autoEl.textContent = '';
@@ -672,8 +723,10 @@ function cancelAutoReset() {
   clearInterval(state.autoResetCountdown);
   state.autoResetTimer = null;
   state.autoResetCountdown = null;
-  $('done-auto').textContent = '';
+  const autoEl = $('done-auto');
+  if (autoEl) autoEl.textContent = '';
 }
+
 document.addEventListener('pointerdown', () => {
   state.lastActivity = Date.now();
 }, { passive: true });
@@ -710,7 +763,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.pinInput.length === 4) setTimeout(tryPin, 180);
   });
 });
-
 function tryPin() {
   if (state.pinInput === settings.pin) {
     $('pin-overlay').classList.remove('show');
@@ -729,8 +781,9 @@ function openSettings() {
   $('setting-prompt').checked = !!settings.prompt;
   $('setting-askname').checked = !!settings.askName;
   $('setting-preview').checked = !!settings.preview;
+  $('setting-autoreset').checked = !!settings.autoReset;
+  $('setting-autoresetsecs').value = settings.autoresetSecs;
   $('setting-kiosk').checked = !!settings.kiosk;
-  $('setting-autoreset').value = settings.autoreset;
   $('setting-pin').value = settings.pin;
   $('setting-mp4').checked = !!settings.mp4;
   $('setting-names').value = settings.names;
@@ -749,8 +802,9 @@ function saveAndClose() {
     prompt: $('setting-prompt').checked,
     askName: $('setting-askname').checked,
     preview: $('setting-preview').checked,
+    autoReset: $('setting-autoreset').checked,
+    autoresetSecs: clamp(parseInt($('setting-autoresetsecs').value, 10) || 15, 5, 300),
     kiosk: $('setting-kiosk').checked,
-    autoreset: clamp(parseInt($('setting-autoreset').value, 10) || 45, 10, 300),
     pin: newPin,
     mp4: $('setting-mp4').checked,
     names: ($('setting-names').value || 'Marta & Joaquín').trim(),
@@ -805,7 +859,6 @@ function revokeGalleryUrls() {
   state.galleryObjectUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch {} });
   state.galleryObjectUrls = [];
 }
-
 async function renderGallery() {
   revokeGalleryUrls();
   const list = $('gallery-list');
@@ -823,12 +876,10 @@ async function renderGallery() {
     $('del-selected').disabled = !on;
   };
   enableButtons(false);
-
   for (const it of items) {
     const card = document.createElement('div');
     card.className = 'gcard';
     card.dataset.id = it.id;
-
     if (it.type === 'audio') {
       const ph = document.createElement('div');
       ph.className = 'gcard-audio';
@@ -848,18 +899,15 @@ async function renderGallery() {
       });
       card.appendChild(thumb);
     }
-
     const meta = document.createElement('div');
     meta.className = 'gcard-meta';
     const d = new Date(it.ts);
     const dstr = d.toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
     meta.innerHTML = `<b>${escapeHtml(it.guestName || 'Anónimo')}</b>${dstr} · ${humanSize(it.size)}`;
     card.appendChild(meta);
-
     const sel = document.createElement('div');
     sel.className = 'gcard-select';
     card.appendChild(sel);
-
     card.addEventListener('click', () => {
       if (state.selectMode) {
         if (state.selectedIds.has(it.id)) {
@@ -879,7 +927,6 @@ async function renderGallery() {
     list.appendChild(card);
   }
 }
-
 function toggleSelectMode() {
   state.selectMode = !state.selectMode;
   state.selectedIds.clear();
@@ -889,7 +936,6 @@ function toggleSelectMode() {
   $('dl-selected').disabled = true;
   $('del-selected').disabled = true;
 }
-
 async function downloadSelected() {
   if (state.selectedIds.size === 0) return;
   const ids = [...state.selectedIds];
@@ -1038,6 +1084,7 @@ function init() {
   rotatePrompts();
   detectFormat();
   applySettingsToUI();
+  setAudioOnly(false);
   dbCount().then(n => {
     $('setting-count').textContent = n;
     localStorage.setItem('confessionCount', n.toString());

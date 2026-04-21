@@ -420,6 +420,7 @@
     100% { transform: scale(1); }
   }
   .done-title { font-family: 'Playfair Display', serif; font-size: clamp(1.7rem, 4vw, 2.4rem); font-weight: 700; color: var(--dark); line-height: 1.3; }
+  .done-subtitle { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.4rem; color: var(--gold-dark); margin-top: -0.4rem; }
   .done-secret {
     font-family: 'Cormorant Garamond', serif; font-style: italic;
     font-size: clamp(1rem, 2.2vw, 1.25rem); color: var(--wine);
@@ -429,7 +430,7 @@
     border-bottom: 1px solid var(--gold-light);
   }
   .done-counter { font-size: 0.88rem; color: #888; margin-top: 0.4rem; letter-spacing: 0.02em; }
-  .done-auto { font-size: 0.75rem; color: #aaa; font-style: italic; }
+  .done-auto { font-size: 0.82rem; color: #888; font-style: italic; margin-top: 0.3rem; }
 
   .confetti {
     position: absolute; font-size: 1.3rem; opacity: 0;
@@ -440,6 +441,35 @@
     10% { opacity: 1; }
     100% { transform: translateY(100vh) rotate(540deg); opacity: 0; }
   }
+
+  /* Audio mode indicator (recording screen) */
+  .audio-mode-pill {
+    background: rgba(114,47,55,0.92);
+    color: white;
+    padding: 0.4rem 1rem;
+    border-radius: 30px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    backdrop-filter: blur(4px);
+  }
+
+  /* Preview audio container */
+  .preview-audio-container {
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1.2rem;
+    background: linear-gradient(160deg,#1a1a1a 0%,#2c1e21 100%);
+    color: white;
+  }
+  .preview-audio-container .pa-icon { font-size: 4.5rem; }
+  .preview-audio-container .pa-hint {
+    font-family: 'Cormorant Garamond', serif; font-style: italic;
+    font-size: 1.1rem; opacity: 0.8;
+  }
+  #playback-audio { width: 85%; max-width: 420px; }
 
   /* Gallery */
   #gallery { background: var(--cream-2); padding: 0; align-items: stretch; justify-content: flex-start; }
@@ -562,7 +592,7 @@
 
   .card {
     background: white; border-radius: var(--radius-lg);
-    padding: 1.8rem 1.5rem; width: 100%; max-width: 420px;
+    padding: 1.8rem 1.5rem; width: 100%; max-width: 460px;
     box-shadow: var(--shadow-deep);
     max-height: 90vh; overflow-y: auto;
   }
@@ -571,13 +601,21 @@
     margin-bottom: 1.2rem; color: var(--dark);
     display: flex; align-items: center; gap: 0.5rem;
   }
+  .card h4 {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.95rem;
+    color: var(--gold-dark);
+    margin: 1.2rem 0 0.2rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
   .setting-row {
     display: flex; justify-content: space-between; align-items: center;
     padding: 0.8rem 0; border-bottom: 1px solid #f0f0f0; gap: 0.8rem;
   }
   .setting-row:last-of-type { border-bottom: none; }
   .setting-row label { font-size: 0.95rem; color: #555; flex: 1; min-width: 0; }
-  .setting-row .hint { display: block; font-size: 0.75rem; color: #aaa; margin-top: 2px; }
+  .setting-row .hint { display: block; font-size: 0.75rem; color: #aaa; margin-top: 2px; line-height: 1.3; }
   .setting-row input[type=number], .setting-row select, .setting-row input[type=text] {
     font-family: 'Lato', sans-serif; font-size: 0.95rem;
     padding: 0.45rem 0.7rem; border: 1px solid #ddd; border-radius: 10px;
@@ -673,6 +711,12 @@
     font-size: 0.92rem; text-align: center;
     max-width: 440px; line-height: 1.4;
   }
+
+  .audio-hint {
+    font-size: 0.8rem; color: #888;
+    margin-top: -0.2rem; max-width: 360px;
+    text-align: center; font-style: italic;
+  }
 </style>
 </head>
 <body>
@@ -699,9 +743,10 @@
     <input type="text" class="name-input" id="guest-name" placeholder="Tu nombre…" maxlength="40" autocomplete="off">
   </div>
   <button class="btn btn-primary" onclick="beginFlow()"><span style="font-size:1.3rem">▶</span> Grabar mi mensaje</button>
-  <div class="btn-row" style="margin-top:0.3rem;">
-    <button class="audio-toggle" id="audio-only-toggle" onclick="toggleAudioOnly()" aria-pressed="false">🎙 Solo audio</button>
+  <div class="btn-row" style="margin-top:0.6rem;">
+    <button class="audio-toggle" id="audio-only-toggle" onclick="toggleAudioOnly()" aria-pressed="false" style="padding:0.75rem 1.5rem;font-size:1rem;">🎙 Solo audio (sin vídeo)</button>
   </div>
+  <p class="audio-hint">¿Prefieres solo la voz? Pulsa el botón antes de «Grabar»</p>
 </section>
 
 <!-- PERMISSION -->
@@ -754,6 +799,7 @@
     <div class="recording-overlay">
       <div class="recording-top">
         <div class="rec-indicator"><div class="rec-dot"></div>REC</div>
+        <div id="audio-mode-indicator" class="audio-mode-pill hidden">🎙 Solo audio</div>
         <div class="timer-display" id="timer">0:30</div>
       </div>
       <div class="recording-bottom">
@@ -769,11 +815,18 @@
 <!-- PREVIEW -->
 <section class="screen" id="preview-screen" aria-label="Vista previa">
   <div class="preview-container">
-    <video id="playback-video" controls playsinline></video>
+    <div id="preview-video-container" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+      <video id="playback-video" controls playsinline></video>
+    </div>
+    <div id="preview-audio-container" class="preview-audio-container hidden">
+      <div class="pa-icon">🎙</div>
+      <div class="pa-hint">Tu mensaje de audio</div>
+      <audio id="playback-audio" controls></audio>
+    </div>
     <div class="preview-overlay">
-      <div class="preview-top"><div class="preview-pill">Vista previa</div></div>
+      <div class="preview-top"><div class="preview-pill">Vista previa · ¿todo bien?</div></div>
       <div class="preview-bottom">
-        <p class="recording-hint">¿Todo bien? Pulsa «Guardar» o repite la grabación</p>
+        <p class="recording-hint">Si te gusta, pulsa «Guardar». Si no, repite la grabación</p>
         <div class="btn-row">
           <button class="btn btn-outline" onclick="rerecord()">↻ Repetir</button>
           <button class="btn btn-primary" onclick="confirmSave()">✓ Guardar</button>
@@ -795,6 +848,7 @@
 <section class="screen" id="done" aria-label="Guardado">
   <div class="done-check">✓</div>
   <h2 class="done-title">¡Mensaje guardado!</h2>
+  <p class="done-subtitle" id="done-subtitle">¡Gracias!</p>
   <p class="done-secret" id="done-secret">Tu secreto está a salvo con nosotros…<br>Marta y Joaquín lo descubrirán en un momento muy especial.</p>
   <p class="done-counter" id="msg-counter"></p>
   <div class="btn-row">
@@ -866,20 +920,34 @@
 <div class="overlay" id="settings-panel" aria-label="Ajustes">
   <div class="card">
     <h3>⚙ Ajustes</h3>
+
+    <h4>Grabación</h4>
     <div class="setting-row"><label>Duración máxima <span class="hint">Entre 10 y 120 segundos</span></label><input type="number" id="setting-duration" value="30" min="10" max="120"></div>
     <div class="setting-row"><label>Cámara por defecto</label><select id="setting-camera"><option value="user">Frontal</option><option value="environment">Trasera</option></select></div>
-    <div class="setting-row"><label>Efecto espejo (frontal) <span class="hint">Voltea la vista previa</span></label><label class="switch"><input type="checkbox" id="setting-mirror" checked><span class="slider"></span></label></div>
+    <div class="setting-row"><label>Efecto espejo (frontal) <span class="hint">Voltea la vista previa durante la grabación</span></label><label class="switch"><input type="checkbox" id="setting-mirror" checked><span class="slider"></span></label></div>
+    <div class="setting-row"><label>Convertir a MP4 <span class="hint">Desactiva si notas lentitud</span></label><label class="switch"><input type="checkbox" id="setting-mp4" checked><span class="slider"></span></label></div>
+
+    <h4>Flujo del invitado</h4>
     <div class="setting-row"><label>Mostrar sugerencia <span class="hint">Pregunta guiada antes de grabar</span></label><label class="switch"><input type="checkbox" id="setting-prompt" checked><span class="slider"></span></label></div>
     <div class="setting-row"><label>Preguntar nombre <span class="hint">Campo opcional en la bienvenida</span></label><label class="switch"><input type="checkbox" id="setting-askname"><span class="slider"></span></label></div>
-    <div class="setting-row"><label>Vista previa antes de guardar</label><label class="switch"><input type="checkbox" id="setting-preview" checked><span class="slider"></span></label></div>
-    <div class="setting-row"><label>Modo kiosco <span class="hint">Oculta ajustes y activa autorreinicio</span></label><label class="switch"><input type="checkbox" id="setting-kiosk"><span class="slider"></span></label></div>
-    <div class="setting-row"><label>Reinicio automático (seg) <span class="hint">Vuelve al inicio si nadie toca nada</span></label><input type="number" id="setting-autoreset" value="45" min="10" max="300"></div>
-    <div class="setting-row"><label>PIN (4 dígitos) <span class="hint">Por defecto 2468</span></label><input type="text" id="setting-pin" maxlength="4" pattern="[0-9]*" inputmode="numeric" style="letter-spacing:0.4em;"></div>
-    <div class="setting-row"><label>Convertir a MP4 <span class="hint">Desactiva si notas lentitud</span></label><label class="switch"><input type="checkbox" id="setting-mp4" checked><span class="slider"></span></label></div>
-    <div class="setting-row"><label>Guardar en galería de la tablet <span class="hint">Copia cada vídeo a la carpeta Descargas (Android)</span></label><label class="switch"><input type="checkbox" id="setting-savegallery" checked><span class="slider"></span></label></div>
+    <div class="setting-row"><label>Vista previa antes de guardar <span class="hint">Mostrar la grabación para aprobar o repetir</span></label><label class="switch"><input type="checkbox" id="setting-preview"><span class="slider"></span></label></div>
+
+    <h4>Tras guardar</h4>
+    <div class="setting-row"><label>Volver al inicio automáticamente <span class="hint">Tras guardar, volver solo a la bienvenida</span></label><label class="switch"><input type="checkbox" id="setting-autoreset" checked><span class="slider"></span></label></div>
+    <div class="setting-row"><label>Segundos antes de volver <span class="hint">Entre 5 y 300</span></label><input type="number" id="setting-autoresetsecs" value="15" min="5" max="300"></div>
+
+    <h4>El día de la boda</h4>
+    <div class="setting-row"><label>Modo kiosco <span class="hint">Bloquea salida del navegador y reinicia si hay inactividad. Actívalo solo el día del evento.</span></label><label class="switch"><input type="checkbox" id="setting-kiosk"><span class="slider"></span></label></div>
+    <div class="setting-row"><label>Guardar en galería de la tablet <span class="hint">Auto-descarga a carpeta Descargas (Android la indexa)</span></label><label class="switch"><input type="checkbox" id="setting-savegallery" checked><span class="slider"></span></label></div>
+    <div class="setting-row"><label>PIN de ajustes <span class="hint">4 dígitos · por defecto 2468</span></label><input type="text" id="setting-pin" maxlength="4" pattern="[0-9]*" inputmode="numeric" style="letter-spacing:0.4em;"></div>
+
+    <h4>Personalización</h4>
+    <div class="setting-row"><label>Nombres de los novios</label><input type="text" id="setting-names" maxlength="60" style="width:180px;"></div>
+
+    <h4>Gestión</h4>
     <div class="setting-row"><label>Mensajes guardados</label><span id="setting-count" style="font-weight:700;color:var(--gold-dark);">0</span></div>
-    <div class="setting-row" style="border-top:1px solid #f0f0f0;margin-top:0.6rem;padding-top:1rem;"><label>Ver galería</label><button class="tool-btn primary" onclick="closeSettings(); openGallery();">🎞 Abrir</button></div>
-    <div class="setting-row"><label>Nombres de los novios</label><input type="text" id="setting-names" maxlength="60" style="width:170px;"></div>
+    <div class="setting-row"><label>Ver galería de mensajes</label><button class="tool-btn primary" onclick="closeSettings(); openGallery();">🎞 Abrir</button></div>
+
     <button class="card-close" onclick="saveAndClose()">Guardar y cerrar</button>
   </div>
 </div>
