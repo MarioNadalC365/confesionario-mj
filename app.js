@@ -1,4 +1,4 @@
-/* EL CONFESIONARIO · Marta & Joaquín — app.js v4.3 */
+/* EL CONFESIONARIO · Joaquín & Marta — app.js v4.6 */
 
 const state = {
   mediaStream: null, mediaRecorder: null, recordedChunks: [],
@@ -30,7 +30,9 @@ const DEFAULT_SETTINGS = {
   prompt: true, askName: false, preview: false,
   autoReset: true, autoresetSecs: 15,
   kiosk: false, pin: '2004', mp4: true,
-  names: 'Marta & Joaquín', saveToGallery: true,
+  names: 'Joaquín & Marta', saveToGallery: true,
+  logo: 'color',
+  weddingDate: '03 · 10 · 2026',
 };
 const SETTINGS_KEY = 'confesionario.settings.v3';
 
@@ -441,7 +443,7 @@ function bindStopHandlers() {
 }
 
 async function handleRecordingDone() {
-  if (state.recordingDoneCalled) { dbg('handleRecordingDone ya llamado'); return; }
+  if (state.recordingDoneCalled) { dbg('ya llamado'); return; }
   state.recordingDoneCalled = true;
   dbg('handleRecordingDone chunks=', state.recordedChunks.length);
   const rawBlob = new Blob(state.recordedChunks, {
@@ -597,7 +599,6 @@ function resetToWelcome() {
   const logEl = $('recording-log');
   if (logEl) { logEl.classList.remove('show'); logEl.textContent = ''; }
   dbgLines.length = 0;
-  // Re-aplicar ajustes para refrescar textos como "Tienes X segundos"
   applySettingsToUI();
   goScreen('welcome');
 }
@@ -664,6 +665,8 @@ function openSettings() {
   $('setting-mp4').checked = !!settings.mp4;
   $('setting-names').value = settings.names;
   $('setting-savegallery').checked = !!settings.saveToGallery;
+  const logoSel = $('setting-logo'); if (logoSel) logoSel.value = settings.logo || 'color';
+  const dateInp = $('setting-date'); if (dateInp) dateInp.value = settings.weddingDate || '';
   dbCount().then(n => $('setting-count').textContent = n);
   $('settings-panel').classList.add('show');
 }
@@ -683,8 +686,10 @@ function saveAndClose() {
     kiosk: $('setting-kiosk').checked,
     pin: newPin,
     mp4: $('setting-mp4').checked,
-    names: ($('setting-names').value || 'Marta & Joaquín').trim(),
+    names: ($('setting-names').value || 'Joaquín & Marta').trim(),
     saveToGallery: $('setting-savegallery').checked,
+    logo: ($('setting-logo')?.value || 'color'),
+    weddingDate: ($('setting-date')?.value || '').trim(),
   };
   saveSettings(settings);
   applySettingsToUI();
@@ -692,16 +697,32 @@ function saveAndClose() {
   toast('Ajustes guardados', 'success');
 }
 function applySettingsToUI() {
-  // Actualizar todas las apariciones de la duración en los textos visibles
-  document.querySelectorAll('[data-duration]').forEach(el => {
-    el.textContent = settings.duration;
-  });
+  document.querySelectorAll('[data-duration]').forEach(el => { el.textContent = settings.duration; });
   const wl = $('wl-duration');
   if (wl) wl.textContent = settings.duration;
   const namWrap = $('name-wrap');
   if (namWrap) namWrap.classList.toggle('hidden', !settings.askName);
   const kb = $('kiosk-badge');
   if (kb) kb.classList.toggle('show', !!settings.kiosk);
+  // Logo
+  const logo = $('wedding-logo');
+  if (logo) {
+    const mode = settings.logo || 'color';
+    if (mode === 'none') {
+      logo.classList.add('hidden');
+    } else {
+      logo.classList.remove('hidden');
+      logo.classList.toggle('byn', mode === 'byn');
+      const desired = mode === 'byn' ? 'logobodaJyMBlancoYNegro.jpeg' : 'logobodaJyM.jpeg';
+      if (!logo.src.endsWith(desired)) logo.src = desired;
+    }
+  }
+  // Fecha bajo los nombres
+  const dateEl = document.querySelector('.welcome-date');
+  if (dateEl) {
+    if (settings.weddingDate) { dateEl.textContent = settings.weddingDate; dateEl.style.display = ''; }
+    else { dateEl.style.display = 'none'; }
+  }
   applyCoupleNames(settings.names);
 }
 function applyCoupleNames(full) {
@@ -709,16 +730,14 @@ function applyCoupleNames(full) {
   if (parts.length !== 2) parts = [full, ''];
   const [a, b] = parts;
   const titleEl = document.querySelector('.welcome-title');
-  const monoEl = document.querySelector('.monogram');
   const doneSecret = $('done-secret');
   const doneMono = $('done-monogram');
   if (titleEl) {
     if (b) titleEl.innerHTML = `${escapeHtml(a)}<span class="amp">&</span>${escapeHtml(b)}`;
     else titleEl.textContent = a;
   }
-  const i1 = (a || 'M').trim()[0] || 'M';
-  const i2 = (b || 'J').trim()[0] || 'J';
-  if (monoEl) monoEl.innerHTML = `${escapeHtml(i1)}<span style="color:var(--gold);">&</span>${escapeHtml(i2)}`;
+  const i1 = (a || 'J').trim()[0] || 'J';
+  const i2 = (b || 'M').trim()[0] || 'M';
   if (doneMono) doneMono.innerHTML = `${escapeHtml(i1)}<span class="seal-amp">&</span>${escapeHtml(i2)}`;
   if (doneSecret) {
     doneSecret.innerHTML = `Tu secreto viaja ahora con nosotros…<br>y llegará a ${escapeHtml(a)} y ${escapeHtml(b)}<br>en el momento más especial.`;
@@ -817,7 +836,7 @@ async function clearAll() {
 async function exportAllZip() {
   const items = await dbGetAll();
   if (items.length === 0) { toast('No hay mensajes que exportar'); return; }
-  await exportSomeAsZip(items.map(i => i.id), `confesionario_mj_${tsStamp(new Date())}.zip`);
+  await exportSomeAsZip(items.map(i => i.id), `confesionario_jm_${tsStamp(new Date())}.zip`);
 }
 async function exportSomeAsZip(ids, filename) {
   toast('Generando ZIP…');

@@ -1,19 +1,19 @@
 <!DOCTYPE html>
-<!-- Confesionario M&J · v4.5 -->
+<!-- Confesionario J&M · v4.6 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>El Confesionario · Marta & Joaquín</title>
+<title>El Confesionario · Joaquín & Marta</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="styles.css">
 <meta name="theme-color" content="#2c2c2c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Confesionario M&J">
+<meta name="apple-mobile-web-app-title" content="Confesionario J&M">
 <link rel="apple-touch-icon" href="appletouchicon.png">
-<meta name="description" content="El Confesionario de la boda de Marta & Joaquín.">
+<meta name="description" content="El Confesionario de la boda de Joaquín & Marta.">
 </head>
 <body>
 
@@ -21,10 +21,11 @@
 <div class="kiosk-badge" id="kiosk-badge">Modo Kiosco</div>
 
 <section class="screen active" id="welcome" aria-label="Bienvenida">
-  <div class="monogram">M<span style="color:var(--gold);">&</span>J</div>
+  <img class="wedding-logo" id="wedding-logo" src="logobodaJyM.jpeg" alt="Boda Joaquín & Marta">
   <p class="welcome-kicker">— La boda de —</p>
-  <h1 class="welcome-title">Marta<span class="amp">&</span>Joaquín</h1>
+  <h1 class="welcome-title">Joaquín<span class="amp">&</span>Marta</h1>
   <p class="welcome-sub">El Confesionario</p>
+  <p class="welcome-date">03 · 10 · 2026</p>
   <div class="divider-sm">Un mensaje para los novios</div>
   <p class="welcome-text">
     Tienes <strong><span id="wl-duration">30</span> segundos</strong> para dejarles
@@ -158,10 +159,10 @@
     <span class="done-diamond">◆</span>
     <span class="done-line"></span>
   </div>
-  <p class="done-secret" id="done-secret">Tu secreto viaja ahora con nosotros…<br>y llegará a Marta y Joaquín<br>en el momento más especial.</p>
+  <p class="done-secret" id="done-secret">Tu secreto viaja ahora con nosotros…<br>y llegará a Joaquín y Marta<br>en el momento más especial.</p>
   <div class="done-seal">
     <div class="done-seal-inner">
-      <div class="done-seal-mono" id="done-monogram">M<span class="seal-amp">&</span>J</div>
+      <div class="done-seal-mono" id="done-monogram">J<span class="seal-amp">&</span>M</div>
     </div>
     <div class="done-signature-date" id="done-signature-date"></div>
   </div>
@@ -253,6 +254,8 @@
     <div class="setting-row"><label>PIN de ajustes <span class="hint">4 dígitos · por defecto 2004</span></label><input type="text" id="setting-pin" maxlength="4" pattern="[0-9]*" inputmode="numeric" style="letter-spacing:0.4em;"></div>
     <h4>Personalización</h4>
     <div class="setting-row"><label>Nombres de los novios</label><input type="text" id="setting-names" maxlength="60" style="width:180px;"></div>
+    <div class="setting-row"><label>Logo de la boda <span class="hint">Color, blanco y negro, o sin logo</span></label><select id="setting-logo"><option value="color">Color (otoñal)</option><option value="byn">Blanco y negro</option><option value="none">Sin logo</option></select></div>
+    <div class="setting-row"><label>Fecha de la boda <span class="hint">Se muestra bajo los nombres</span></label><input type="text" id="setting-date" maxlength="20" style="width:140px;" placeholder="03 · 10 · 2026"></div>
     <h4>Gestión</h4>
     <div class="setting-row"><label>Mensajes guardados</label><span id="setting-count" style="font-weight:700;color:var(--gold-dark);">0</span></div>
     <div class="setting-row"><label>Ver galería de mensajes</label><button class="tool-btn primary" onclick="closeSettings(); openGallery();">🎞 Abrir</button></div>
@@ -260,9 +263,9 @@
   </div>
 </div>
 
-<div class="watermark">M&J · El Confesionario</div>
+<div class="watermark">J&M · El Confesionario</div>
 <div class="toast" id="toast"></div>
-<div class="version-tag">v4.5</div>
+<div class="version-tag">v4.6</div>
 
 <script src="app.js"></script>
 </body>
