@@ -47,7 +47,6 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   100%{transform:translateY(115vh) translateX(-20px) rotate(360deg);opacity:0}
 }
 
-/* FIX: pantallas inactivas con visibility:hidden para no capturar clicks */
 .screen {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -66,11 +65,12 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 #welcome { gap: 0.9rem; text-align: center; }
 
 .wedding-logo {
-  width: clamp(140px, 32vw, 200px);
+  width: clamp(100px, 20vw, 130px);
   height: auto;
-  border-radius: 50%;
-  box-shadow: 0 10px 30px rgba(201,169,110,0.35), 0 0 0 1px rgba(201,169,110,0.15);
-  margin-bottom: 0.1rem;
+  margin-bottom: 0.3rem;
+  /* Fundimos el fondo blanco/crema del JPEG con el cream de la app
+     vía mix-blend-mode. Así el logo parece no tener fondo. */
+  mix-blend-mode: multiply;
   animation: logoFadeIn 0.9s ease-out both;
 }
 .wedding-logo.hidden { display: none; }
