@@ -1,6 +1,6 @@
-/* El Confesionario · Service Worker v4.1 */
+/* El Confesionario · Service Worker v4.5 */
 
-const VERSION = 'v4.3-2026-04-21';
+const VERSION = 'v4.5-2026-04-21';
 const APP_CACHE = `confesionario-app-${VERSION}`;
 const RUNTIME_CACHE = `confesionario-runtime-${VERSION}`;
 
@@ -8,6 +8,7 @@ const APP_ASSETS = [
   './',
   './index.html',
   './app.js',
+  './styles.css',
   './manifest.json',
   './icon192.png',
   './icon512.png',
