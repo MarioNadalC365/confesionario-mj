@@ -1,6 +1,6 @@
-/* El Confesionario · Service Worker v4.6 */
+/* El Confesionario · Service Worker v4.8 */
 
-const VERSION = 'v4.6-2026-04-21';
+const VERSION = 'v4.8-2026-04-21';
 const APP_CACHE = `confesionario-app-${VERSION}`;
 const RUNTIME_CACHE = `confesionario-runtime-${VERSION}`;
 
@@ -13,8 +13,8 @@ const APP_ASSETS = [
   './icon192.png',
   './icon512.png',
   './appletouchicon.png',
-  './logobodaJyM.jpeg',
-  './logobodaJyMBlancoYNegro.jpeg',
+  './logobodaJyM-removebg-preview.png',
+  './logobodaJyMBlancoYNegro-removebg-preview.png',
 ];
 
 const CDN_HOSTS = [

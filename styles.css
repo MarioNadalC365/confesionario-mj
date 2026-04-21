@@ -65,12 +65,9 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 #welcome { gap: 0.9rem; text-align: center; }
 
 .wedding-logo {
-  width: clamp(100px, 20vw, 130px);
+  width: clamp(110px, 22vw, 150px);
   height: auto;
   margin-bottom: 0.3rem;
-  /* Fundimos el fondo blanco/crema del JPEG con el cream de la app
-     vía mix-blend-mode. Así el logo parece no tener fondo. */
-  mix-blend-mode: multiply;
   animation: logoFadeIn 0.9s ease-out both;
 }
 .wedding-logo.hidden { display: none; }

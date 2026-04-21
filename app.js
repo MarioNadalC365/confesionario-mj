@@ -1,4 +1,4 @@
-/* EL CONFESIONARIO · Joaquín & Marta — app.js v4.6 */
+/* EL CONFESIONARIO · Joaquín & Marta — app.js v4.8 */
 
 const state = {
   mediaStream: null, mediaRecorder: null, recordedChunks: [],
@@ -704,7 +704,6 @@ function applySettingsToUI() {
   if (namWrap) namWrap.classList.toggle('hidden', !settings.askName);
   const kb = $('kiosk-badge');
   if (kb) kb.classList.toggle('show', !!settings.kiosk);
-  // Logo
   const logo = $('wedding-logo');
   if (logo) {
     const mode = settings.logo || 'color';
@@ -713,11 +712,10 @@ function applySettingsToUI() {
     } else {
       logo.classList.remove('hidden');
       logo.classList.toggle('byn', mode === 'byn');
-      const desired = mode === 'byn' ? 'logobodaJyMBlancoYNegro.jpeg' : 'logobodaJyM.jpeg';
+      const desired = mode === 'byn' ? 'logobodaJyMBlancoYNegro-removebg-preview.png' : 'logobodaJyM-removebg-preview.png';
       if (!logo.src.endsWith(desired)) logo.src = desired;
     }
   }
-  // Fecha bajo los nombres
   const dateEl = document.querySelector('.welcome-date');
   if (dateEl) {
     if (settings.weddingDate) { dateEl.textContent = settings.weddingDate; dateEl.style.display = ''; }
