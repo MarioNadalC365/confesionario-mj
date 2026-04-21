@@ -1,57 +1,25 @@
-/* ════════════════════════════════════════════════════════════════════
-   EL CONFESIONARIO · Marta & Joaquín — app.js  (v3 arreglos)
-   • Preview OFF por defecto
-   • Autorreinicio independiente del modo kiosco
-   • Botón Terminar a prueba de balas (JS binding + vibración + fallback)
-   • Pantalla final rediseñada con monograma firmado
-   • Modo audio visible con indicador durante grabación
-   • Preview audio con <audio> (no video negro)
-════════════════════════════════════════════════════════════════════ */
+/* EL CONFESIONARIO · Marta & Joaquín — app.js v4 */
 
-/* ─────────────────────────── State ────────────────────────── */
 const state = {
-  mediaStream: null,
-  mediaRecorder: null,
-  recordedChunks: [],
-  lastBlob: null,
-  lastExt: 'mp4',
-  timerInterval: null,
-  timeLeft: 30,
-  isRecording: false,
-  chosenMimeType: '',
-  chosenExtension: '',
-  audioOnly: false,
-  wakeLock: null,
-  autoResetTimer: null,
-  autoResetCountdown: null,
-  audioCtx: null,
-  micAnalyser: null,
-  micRAF: null,
-  promptIndex: 0,
-  pinInput: '',
-  selectMode: false,
-  selectedIds: new Set(),
-  currentPlayingId: null,
-  lastActivity: Date.now(),
-  playerObjectUrl: null,
-  galleryObjectUrls: [],
+  mediaStream: null, mediaRecorder: null, recordedChunks: [],
+  lastBlob: null, lastExt: 'mp4',
+  timerInterval: null, timeLeft: 30, isRecording: false,
+  chosenMimeType: '', chosenExtension: '',
+  audioOnly: false, wakeLock: null,
+  autoResetTimer: null, autoResetCountdown: null,
+  audioCtx: null, micAnalyser: null, micRAF: null,
+  promptIndex: 0, pinInput: '',
+  selectMode: false, selectedIds: new Set(),
+  currentPlayingId: null, lastActivity: Date.now(),
+  playerObjectUrl: null, galleryObjectUrls: [],
 };
 
-/* ─────────────────────────── Settings ─────────────────────── */
 const DEFAULT_SETTINGS = {
-  duration: 30,
-  camera: 'user',
-  mirror: true,
-  prompt: true,
-  askName: false,
-  preview: false,
-  autoReset: true,
-  autoresetSecs: 15,
-  kiosk: false,
-  pin: '2468',
-  mp4: true,
-  names: 'Marta & Joaquín',
-  saveToGallery: true,
+  duration: 30, camera: 'user', mirror: true,
+  prompt: true, askName: false, preview: false,
+  autoReset: true, autoresetSecs: 15,
+  kiosk: false, pin: '2468', mp4: true,
+  names: 'Marta & Joaquín', saveToGallery: true,
 };
 const SETTINGS_KEY = 'confesionario.settings.v3';
 
@@ -63,26 +31,18 @@ function loadSettings() {
       if (v2) {
         try {
           const parsed = JSON.parse(v2);
-          return {
-            ...DEFAULT_SETTINGS,
-            ...parsed,
-            preview: false,
-            autoReset: true,
-            autoresetSecs: Math.max(5, parsed.autoreset || 15),
-          };
+          return { ...DEFAULT_SETTINGS, ...parsed, preview: false, autoReset: true,
+            autoresetSecs: Math.max(5, parsed.autoreset || 15) };
         } catch {}
       }
       return { ...DEFAULT_SETTINGS };
     }
     return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-  } catch {
-    return { ...DEFAULT_SETTINGS };
-  }
+  } catch { return { ...DEFAULT_SETTINGS }; }
 }
 function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 let settings = loadSettings();
 
-/* ─────────────────────────── Prompts ──────────────────────── */
 const PROMPTS = [
   '¿Qué recuerdo guardarás siempre de ellos?',
   'Un consejo que les darías para su vida juntos…',
@@ -102,11 +62,7 @@ function rotatePrompts() {
   }
 }
 
-/* ─────────────────────────── IndexedDB ────────────────────── */
-const DB_NAME = 'confesionario';
-const DB_VERSION = 1;
-const STORE = 'messages';
-
+const DB_NAME = 'confesionario', DB_VERSION = 1, STORE = 'messages';
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -126,8 +82,7 @@ async function dbAdd(record) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     const req = tx.objectStore(STORE).add(record);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
   });
 }
 async function dbGetAll() {
@@ -135,8 +90,7 @@ async function dbGetAll() {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly');
     const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result || []); req.onerror = () => reject(req.error);
   });
 }
 async function dbGet(id) {
@@ -144,8 +98,7 @@ async function dbGet(id) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly');
     const req = tx.objectStore(STORE).get(id);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
   });
 }
 async function dbDelete(id) {
@@ -153,8 +106,7 @@ async function dbDelete(id) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     const req = tx.objectStore(STORE).delete(id);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(); req.onerror = () => reject(req.error);
   });
 }
 async function dbClear() {
@@ -162,8 +114,7 @@ async function dbClear() {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     const req = tx.objectStore(STORE).clear();
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(); req.onerror = () => reject(req.error);
   });
 }
 async function dbCount() {
@@ -171,25 +122,18 @@ async function dbCount() {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly');
     const req = tx.objectStore(STORE).count();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
   });
 }
 
-/* ─────────────────────────── Helpers ──────────────────────── */
 function $(id) { return document.getElementById(id); }
 function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function tsStamp(d) {
-  return d.getFullYear() +
-    String(d.getMonth()+1).padStart(2,'0') +
-    String(d.getDate()).padStart(2,'0') + '_' +
-    String(d.getHours()).padStart(2,'0') +
-    String(d.getMinutes()).padStart(2,'0') +
-    String(d.getSeconds()).padStart(2,'0');
+  return d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') + '_' +
+    String(d.getHours()).padStart(2,'0') + String(d.getMinutes()).padStart(2,'0') + String(d.getSeconds()).padStart(2,'0');
 }
 function safeName(s) {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -202,7 +146,6 @@ function humanSize(n) {
   return (n/1024/1024).toFixed(1) + ' MB';
 }
 
-/* ─────────────────────────── Screens ──────────────────────── */
 function goScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const el = id === 'preview' ? $('preview-screen') : $(id);
@@ -210,8 +153,7 @@ function goScreen(id) {
   state.lastActivity = Date.now();
   const darkScreens = ['countdown', 'recording', 'preview'];
   const btn = $('settings-toggle');
-  if (darkScreens.includes(id)) btn.classList.add('dark');
-  else btn.classList.remove('dark');
+  if (darkScreens.includes(id)) btn.classList.add('dark'); else btn.classList.remove('dark');
 }
 
 let toastTimer = null;
@@ -223,85 +165,45 @@ function toast(msg, kind = '') {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
-/* ─────────────────────────── Format detection ─────────────── */
 function detectFormat() {
-  const mp4Types = [
-    'video/mp4;codecs=avc1,mp4a.40.2',
-    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-    'video/mp4',
-  ];
-  for (const mt of mp4Types) {
-    if (MediaRecorder.isTypeSupported(mt)) {
-      state.chosenMimeType = mt; state.chosenExtension = 'mp4'; return;
-    }
-  }
-  const webmTypes = [
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm',
-  ];
-  for (const mt of webmTypes) {
-    if (MediaRecorder.isTypeSupported(mt)) {
-      state.chosenMimeType = mt; state.chosenExtension = 'webm'; return;
-    }
-  }
-  state.chosenMimeType = ''; state.chosenExtension = 'webm';
+  const mp4 = ['video/mp4;codecs=avc1,mp4a.40.2','video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4'];
+  for (const mt of mp4) if (MediaRecorder.isTypeSupported(mt)) { state.chosenMimeType=mt; state.chosenExtension='mp4'; return; }
+  const webm = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  for (const mt of webm) if (MediaRecorder.isTypeSupported(mt)) { state.chosenMimeType=mt; state.chosenExtension='webm'; return; }
+  state.chosenMimeType=''; state.chosenExtension='webm';
 }
 function detectAudioFormat() {
-  const types = [
-    'audio/mp4;codecs=mp4a.40.2',
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/mp4',
-  ];
-  for (const mt of types) {
-    if (MediaRecorder.isTypeSupported(mt)) {
-      return { mime: mt, ext: mt.includes('mp4') ? 'm4a' : 'webm' };
-    }
-  }
+  const types = ['audio/mp4;codecs=mp4a.40.2','audio/webm;codecs=opus','audio/webm','audio/mp4'];
+  for (const mt of types) if (MediaRecorder.isTypeSupported(mt)) return { mime: mt, ext: mt.includes('mp4')?'m4a':'webm' };
   return { mime: '', ext: 'webm' };
 }
 
-/* ─────────────────────────── Wake Lock ────────────────────── */
 async function acquireWakeLock() {
-  try {
-    if ('wakeLock' in navigator) {
-      state.wakeLock = await navigator.wakeLock.request('screen');
-    }
-  } catch {}
+  try { if ('wakeLock' in navigator) state.wakeLock = await navigator.wakeLock.request('screen'); } catch {}
 }
-function releaseWakeLock() {
-  try { state.wakeLock?.release(); } catch {}
-  state.wakeLock = null;
-}
+function releaseWakeLock() { try { state.wakeLock?.release(); } catch {} state.wakeLock = null; }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && !state.wakeLock) acquireWakeLock();
 });
 
-/* ─────────────────────────── Audio-only ───────────────────── */
 function setAudioOnly(value) {
   state.audioOnly = !!value;
   const btn = $('audio-only-toggle');
   if (btn) {
     btn.classList.toggle('active', state.audioOnly);
     btn.setAttribute('aria-pressed', String(state.audioOnly));
-    btn.innerHTML = state.audioOnly
-      ? '🎙 <b>Modo audio ACTIVADO</b>'
-      : '🎙 Solo audio (sin vídeo)';
+    btn.innerHTML = state.audioOnly ? '🎙 <b>Modo audio ACTIVADO</b>' : '🎙 Solo audio (sin vídeo)';
   }
   const ind = $('audio-mode-indicator');
   if (ind) ind.classList.toggle('hidden', !state.audioOnly);
 }
 function toggleAudioOnly() { setAudioOnly(!state.audioOnly); }
 
-/* ─────────────────────────── Permissions / Camera ─────────── */
 async function requestPermissionAndContinue() {
   const errBanner = $('perm-error');
   errBanner.classList.add('hidden');
-  try {
-    await initCamera();
-    startCountdown();
-  } catch (err) {
+  try { await initCamera(); startCountdown(); }
+  catch (err) {
     console.error(err);
     errBanner.classList.remove('hidden');
     errBanner.textContent = describePermError(err);
@@ -318,19 +220,13 @@ function describePermError(err) {
   return 'No se pudo iniciar la cámara. ' + (err?.message || '');
 }
 async function initCamera() {
-  if (state.mediaStream) {
-    state.mediaStream.getTracks().forEach(t => t.stop());
-    state.mediaStream = null;
-  }
+  if (state.mediaStream) { state.mediaStream.getTracks().forEach(t => t.stop()); state.mediaStream = null; }
   if (state.audioOnly) {
-    state.mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: true, video: false
-    });
+    state.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
   } else {
     const facingMode = settings.camera || 'user';
     state.mediaStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: true,
+      video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true,
     });
     const video = $('preview-video');
     video.srcObject = state.mediaStream;
@@ -355,10 +251,7 @@ function setupMicMeter(stream) {
     const loop = () => {
       analyser.getByteTimeDomainData(buf);
       let sum = 0;
-      for (let i = 0; i < buf.length; i++) {
-        const v = (buf[i] - 128) / 128;
-        sum += v * v;
-      }
+      for (let i = 0; i < buf.length; i++) { const v = (buf[i]-128)/128; sum += v*v; }
       const rms = Math.sqrt(sum / buf.length);
       const pct = Math.min(100, Math.round(rms * 260));
       if (meterEl) meterEl.style.height = pct + '%';
@@ -376,38 +269,27 @@ function cleanupMicMeter() {
   if (state.micRAF) cancelAnimationFrame(state.micRAF);
   state.micRAF = null;
   try { state.audioCtx?.close(); } catch {}
-  state.audioCtx = null;
-  state.micAnalyser = null;
+  state.audioCtx = null; state.micAnalyser = null;
 }
 
-/* ─────────────────────────── Flow ─────────────────────────── */
 function beginFlow() {
   state.lastActivity = Date.now();
   if (settings.prompt) { nextPrompt(true); goScreen('prompt'); }
   else if (state.mediaStream) startCountdown();
   else goScreen('permission');
 }
-
 function nextPrompt(reset = false) {
   if (reset) state.promptIndex = 0;
   else state.promptIndex = (state.promptIndex + 1) % Math.min(4, PROMPTS.length);
   const el = $('prompt-text');
   el.style.opacity = 0;
-  setTimeout(() => {
-    el.textContent = PROMPTS[state.promptIndex];
-    el.style.transition = 'opacity 0.4s';
-    el.style.opacity = 1;
-  }, 180);
-  document.querySelectorAll('.prompt-dot').forEach((d, i) => {
-    d.classList.toggle('on', i === state.promptIndex);
-  });
+  setTimeout(() => { el.textContent = PROMPTS[state.promptIndex]; el.style.transition='opacity 0.4s'; el.style.opacity=1; }, 180);
+  document.querySelectorAll('.prompt-dot').forEach((d, i) => d.classList.toggle('on', i === state.promptIndex));
 }
 
-/* ─────────────────────────── Countdown ────────────────────── */
 async function startCountdown() {
   state.timeLeft = settings.duration;
   $('wl-duration').textContent = settings.duration;
-
   if (!state.mediaStream) {
     try { await initCamera(); }
     catch (e) {
@@ -417,47 +299,39 @@ async function startCountdown() {
       return;
     }
   }
-
   $('preview-video').style.display = state.audioOnly ? 'none' : '';
   $('audio-visualizer').classList.toggle('show', state.audioOnly);
   $('mic-meter').style.display = state.audioOnly ? 'none' : '';
-
   goScreen('countdown');
   await acquireWakeLock();
-
   const numEl = $('countdown-num');
   const labelEl = $('countdown-label');
   labelEl.textContent = state.audioOnly ? 'Prepárate · Modo audio' : 'Prepárate…';
   numEl.classList.remove('go');
   let count = 3;
-  numEl.textContent = count;
-  reAnim(numEl);
+  numEl.textContent = count; reAnim(numEl);
   const countInterval = setInterval(() => {
     count--;
     if (count > 0) { numEl.textContent = count; numEl.classList.remove('go'); reAnim(numEl); }
     else {
       clearInterval(countInterval);
-      numEl.textContent = '¡YA!';
-      numEl.classList.add('go');
+      numEl.textContent = '¡YA!'; numEl.classList.add('go');
       labelEl.textContent = 'Habla con el corazón';
       reAnim(numEl);
       setTimeout(startRecording, 450);
     }
   }, 1000);
 }
-function reAnim(el) {
-  el.style.animation = 'none';
-  void el.offsetWidth;
-  el.style.animation = 'pulse-in 0.7s ease-out';
-}
+function reAnim(el) { el.style.animation = 'none'; void el.offsetWidth; el.style.animation = 'pulse-in 0.7s ease-out'; }
 
-/* ─────────────────────────── Recording ────────────────────── */
 function startRecording() {
+  console.log('[Confes] startRecording');
   goScreen('recording');
   bindStopHandlers();
   const btn = $('btn-stop');
   if (btn) { btn.style.opacity = ''; btn.disabled = false; }
   state.recordedChunks = [];
+  state.lastBlob = null;
   state.isRecording = true;
 
   let options = {};
@@ -466,18 +340,25 @@ function startRecording() {
     const af = detectAudioFormat();
     if (af.mime) options.mimeType = af.mime;
     ext = af.ext;
-  } else if (state.chosenMimeType) {
-    options.mimeType = state.chosenMimeType;
-  }
+  } else if (state.chosenMimeType) { options.mimeType = state.chosenMimeType; }
   state.lastExt = ext;
 
   try { state.mediaRecorder = new MediaRecorder(state.mediaStream, options); }
   catch { state.mediaRecorder = new MediaRecorder(state.mediaStream); }
 
   state.mediaRecorder.ondataavailable = (e) => {
-    if (e.data && e.data.size > 0) state.recordedChunks.push(e.data);
+    if (e.data && e.data.size > 0) {
+      state.recordedChunks.push(e.data);
+      console.log('[Confes] chunk total=', state.recordedChunks.length);
+    }
   };
-  state.mediaRecorder.onstop = () => handleRecordingDone();
+  state.mediaRecorder.onstop = () => {
+    console.log('[Confes] onstop · chunks=', state.recordedChunks.length);
+    cleanupMicMeter();
+    try { if (state.mediaStream) { state.mediaStream.getTracks().forEach(t => t.stop()); state.mediaStream = null; } } catch {}
+    handleRecordingDone();
+  };
+  state.mediaRecorder.onerror = (ev) => { console.error('[Confes] mediaRecorder.onerror', ev); };
   state.mediaRecorder.start(100);
 
   state.timeLeft = settings.duration;
@@ -499,10 +380,11 @@ function updateTimerDisplay() {
   el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
   el.classList.toggle('warning', sec <= 5);
 }
+
 function stopRecording(e) {
   try { e?.preventDefault?.(); e?.stopPropagation?.(); } catch {}
-  if (!state.isRecording) return;
-  console.log('[Confesionario] Deteniendo grabación');
+  if (!state.isRecording) { console.log('[Confes] stopRecording: ya no recording'); return; }
+  console.log('[Confes] stopRecording INICIO');
   state.isRecording = false;
   clearInterval(state.timerInterval);
   state.timerInterval = null;
@@ -511,36 +393,26 @@ function stopRecording(e) {
   const btn = $('btn-stop');
   if (btn) { btn.style.opacity = '0.6'; btn.disabled = true; }
 
+  // Feedback inmediato al usuario: saving ya
+  goScreen('saving');
+  const savingText = $('saving-text');
+  if (savingText) savingText.textContent = 'Procesando tu mensaje…';
+
   try {
     if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+      console.log('[Confes] mediaRecorder.stop()');
       state.mediaRecorder.stop();
-    }
-  } catch (err) {
-    console.warn('mediaRecorder.stop() lanzó:', err);
-  }
+    } else { console.warn('[Confes] mediaRecorder inactivo'); }
+  } catch (err) { console.warn('[Confes] stop() lanzó:', err); }
 
-  cleanupMicMeter();
+  // Salvaguarda: si pasan 4s en saving sin blob, forzamos
   setTimeout(() => {
-    try {
-      if (state.mediaStream) {
-        state.mediaStream.getTracks().forEach(t => t.stop());
-        state.mediaStream = null;
-      }
-    } catch {}
-  }, 120);
-
-  // Salvaguarda: si onstop no dispara en 3s, forzamos
-  setTimeout(() => {
-    const onRecording = document.querySelector('.screen.active')?.id === 'recording';
-    if (onRecording) {
-      console.warn('Fallback: forzando handleRecordingDone');
-      if (state.recordedChunks && state.recordedChunks.length > 0) handleRecordingDone();
-      else {
-        toast('No se pudo guardar (grabación vacía)', 'error');
-        goScreen('welcome');
-      }
+    const active = document.querySelector('.screen.active')?.id;
+    if (active === 'saving' && !state.lastBlob) {
+      console.warn('[Confes] Fallback: forzando handleRecordingDone');
+      handleRecordingDone();
     }
-  }, 3000);
+  }, 4000);
 }
 
 function bindStopHandlers() {
@@ -553,18 +425,11 @@ function bindStopHandlers() {
   btn.addEventListener('pointerup', handler);
 }
 
-/* ─────────────────────────── After recording ──────────────── */
 async function handleRecordingDone() {
   const rawBlob = new Blob(state.recordedChunks, {
-    type: state.audioOnly
-      ? (detectAudioFormat().mime || 'audio/webm')
-      : (state.chosenMimeType || 'video/webm')
+    type: state.audioOnly ? (detectAudioFormat().mime || 'audio/webm') : (state.chosenMimeType || 'video/webm')
   });
-  if (settings.preview) {
-    state.lastBlob = rawBlob;
-    showPreview(rawBlob);
-    return;
-  }
+  if (settings.preview) { state.lastBlob = rawBlob; showPreview(rawBlob); return; }
   await finalizeAndSave(rawBlob);
 }
 function showPreview(blob) {
@@ -576,23 +441,18 @@ function showPreview(blob) {
     if (vidC) vidC.classList.add('hidden');
     if (audC) audC.classList.remove('hidden');
     const a = $('playback-audio');
-    a.src = state.playerObjectUrl;
-    a.load();
-    a.play().catch(() => {});
+    a.src = state.playerObjectUrl; a.load(); a.play().catch(()=>{});
   } else {
     if (audC) audC.classList.add('hidden');
     if (vidC) vidC.classList.remove('hidden');
     const v = $('playback-video');
-    v.src = state.playerObjectUrl;
-    v.load();
-    v.play().catch(() => {});
+    v.src = state.playerObjectUrl; v.load(); v.play().catch(()=>{});
   }
   goScreen('preview');
   releaseWakeLock();
 }
 function rerecord() {
-  const v = $('playback-video');
-  const a = $('playback-audio');
+  const v = $('playback-video'); const a = $('playback-audio');
   try { v.pause(); v.removeAttribute('src'); v.load(); } catch {}
   try { a.pause(); a.removeAttribute('src'); a.load(); } catch {}
   if (state.playerObjectUrl) { URL.revokeObjectURL(state.playerObjectUrl); state.playerObjectUrl = null; }
@@ -601,8 +461,7 @@ function rerecord() {
     .catch(e => { toast(describePermError(e), 'error'); goScreen('welcome'); });
 }
 async function confirmSave() {
-  const v = $('playback-video');
-  const a = $('playback-audio');
+  const v = $('playback-video'); const a = $('playback-audio');
   try { v.pause(); v.removeAttribute('src'); v.load(); } catch {}
   try { a.pause(); a.removeAttribute('src'); a.load(); } catch {}
   if (state.playerObjectUrl) { URL.revokeObjectURL(state.playerObjectUrl); state.playerObjectUrl = null; }
@@ -611,19 +470,20 @@ async function confirmSave() {
 }
 
 async function finalizeAndSave(rawBlob) {
-  goScreen('saving');
-  const savingText = $('saving-text');
-  const savingSub = $('saving-sub');
-  const bar = $('saving-progress-fill');
-  bar.style.width = '10%';
+  console.log('[Confes] finalizeAndSave, size=', rawBlob?.size);
+  state.lastBlob = rawBlob;
+  if (document.querySelector('.screen.active')?.id !== 'saving') goScreen('saving');
+  const savingText = $('saving-text'), savingSub = $('saving-sub'), bar = $('saving-progress-fill');
+  if (bar) bar.style.width = '10%';
   const isVideo = !state.audioOnly;
   let finalBlob = rawBlob;
   let ext = state.lastExt;
+  const guestName = ($('guest-name')?.value || '').trim();
 
   if (isVideo && settings.mp4 && state.chosenExtension !== 'mp4') {
-    savingText.textContent = 'Convirtiendo a MP4…';
-    savingSub.textContent = 'Esto puede tardar unos segundos.';
-    bar.style.width = '30%';
+    if (savingText) savingText.textContent = 'Convirtiendo a MP4…';
+    if (savingSub) savingSub.textContent = 'Esto puede tardar unos segundos.';
+    if (bar) bar.style.width = '30%';
     try {
       const { FFmpeg } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/+esm');
       const { fetchFile } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/+esm');
@@ -632,85 +492,73 @@ async function finalizeAndSave(rawBlob) {
         coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js',
         wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm',
       });
-      bar.style.width = '55%';
+      if (bar) bar.style.width = '55%';
       await ffmpeg.writeFile('input.webm', await fetchFile(rawBlob));
-      await ffmpeg.exec([
-        '-i','input.webm',
-        '-c:v','libx264','-preset','ultrafast','-crf','28',
-        '-c:a','aac','-b:a','128k',
-        '-movflags','+faststart',
-        'output.mp4'
-      ]);
-      bar.style.width = '85%';
+      await ffmpeg.exec(['-i','input.webm','-c:v','libx264','-preset','ultrafast','-crf','28','-c:a','aac','-b:a','128k','-movflags','+faststart','output.mp4']);
+      if (bar) bar.style.width = '85%';
       const data = await ffmpeg.readFile('output.mp4');
       finalBlob = new Blob([data.buffer], { type: 'video/mp4' });
       ext = 'mp4';
+      console.log('[Confes] MP4 conversion OK');
     } catch (e) {
-      console.warn('MP4 conversion failed, keeping original', e);
+      console.warn('[Confes] MP4 falló, keeping original:', e);
       ext = state.chosenExtension;
     }
   }
 
-  bar.style.width = '95%';
-  savingText.textContent = 'Guardando…';
-  savingSub.textContent = 'Un último suspiro…';
+  if (bar) bar.style.width = '95%';
+  if (savingText) savingText.textContent = 'Guardando…';
+  if (savingSub) savingSub.textContent = 'Un último suspiro…';
 
+  let dbOk = false, totalCount = 0, filename = '';
   try {
-    const guestName = ($('guest-name')?.value || '').trim();
     const now = new Date();
     const ts = tsStamp(now);
     const count = (await dbCount()) + 1;
-    const filename = `confesion_${String(count).padStart(3,'0')}_${ts}${guestName ? '_' + safeName(guestName) : ''}.${ext}`;
-    const record = {
-      ts: now.getTime(),
-      filename, ext,
+    filename = `confesion_${String(count).padStart(3,'0')}_${ts}${guestName ? '_' + safeName(guestName) : ''}.${ext}`;
+    await dbAdd({
+      ts: now.getTime(), filename, ext,
       type: isVideo ? 'video' : 'audio',
       mime: finalBlob.type, size: finalBlob.size,
-      guestName: guestName || null,
-      blob: finalBlob,
-    };
-    await dbAdd(record);
-    bar.style.width = '100%';
-    const totalCount = await dbCount();
+      guestName: guestName || null, blob: finalBlob,
+    });
+    dbOk = true;
+    totalCount = await dbCount();
     localStorage.setItem('confessionCount', totalCount.toString());
+    console.log('[Confes] IndexedDB OK, total=', totalCount);
+  } catch (e) { console.error('[Confes] IndexedDB error:', e); }
 
-    let galleryOk = false;
-    if (settings.saveToGallery) {
-      try { triggerDownload(finalBlob, filename); galleryOk = true; }
-      catch (dlErr) { console.warn('Auto-descarga falló', dlErr); }
-    }
+  if (settings.saveToGallery && filename) {
+    try { triggerDownload(finalBlob, filename); console.log('[Confes] descarga disparada'); }
+    catch (dlErr) { console.warn('[Confes] descarga falló:', dlErr); }
+  }
+  if (bar) bar.style.width = '100%';
 
-    setTimeout(() => {
+  // SIEMPRE ir a done
+  setTimeout(() => {
+    try {
       goScreen('done');
-      const galleryMsg = settings.saveToGallery
-        ? (galleryOk ? ' · también en la galería de la tablet' : ' · (no se pudo copiar a galería)')
-        : '';
-      $('done-subtitle').textContent = guestName
-        ? `Gracias, ${guestName} ✨`
-        : '¡Gracias por tu confesión!';
+      const subtitle = $('done-subtitle');
+      if (subtitle) subtitle.textContent = guestName ? `Gracias, ${guestName} ✨` : '¡Gracias de corazón!';
       const dateEl = $('done-signature-date');
       if (dateEl) {
         const d = new Date();
-        const dstr = d.toLocaleDateString('es-ES', { day:'numeric', month:'long', year:'numeric' });
-        dateEl.textContent = dstr;
+        dateEl.textContent = d.toLocaleDateString('es-ES', { day:'numeric', month:'long', year:'numeric' });
       }
-      $('msg-counter').textContent = `Confesión nº ${totalCount} · ${ext.toUpperCase()}${galleryMsg}`;
-      $('setting-count').textContent = totalCount;
+      const counter = $('msg-counter');
+      if (counter) counter.textContent = dbOk ? '' : 'Hubo un tropiezo al guardar, pero tu mensaje llegó.';
+      const setCount = $('setting-count');
+      if (setCount && totalCount) setCount.textContent = totalCount;
       launchConfetti();
       scheduleAutoReset();
       const gn = $('guest-name');
       if (gn) gn.value = '';
-    }, 350);
-  } catch (e) {
-    console.error(e);
-    toast('Error al guardar: ' + e.message, 'error');
-    goScreen('welcome');
-  }
+    } catch (finalErr) { console.error('[Confes] Error done:', finalErr); goScreen('done'); }
+  }, 350);
 }
 
-/* ─────────────────────────── Confetti ─────────────────────── */
 function launchConfetti() {
-  const symbols = ['🤍', '✿', '✦', '❤️', '🎉'];
+  const symbols = ['🤍','✿','✦','❤️','🎉'];
   const root = $('done');
   for (let i = 0; i < 24; i++) {
     const el = document.createElement('div');
@@ -724,7 +572,6 @@ function launchConfetti() {
   }
 }
 
-/* ─────────────────────────── Reset ────────────────────────── */
 function resetToWelcome() {
   cancelAutoReset();
   $('progress-bar').style.width = '0%';
@@ -737,8 +584,7 @@ function scheduleAutoReset() {
   if (!settings.autoReset) return;
   const secs = Math.max(5, Number(settings.autoresetSecs) || 15);
   let remaining = secs;
-  const autoEl = $('done-auto');
-  const ring = $('done-auto-ring');
+  const autoEl = $('done-auto'), ring = $('done-auto-ring');
   if (ring) ring.classList.add('show');
   autoEl.textContent = `Volviendo al inicio en ${remaining}s`;
   state.autoResetCountdown = setInterval(() => {
@@ -751,24 +597,15 @@ function scheduleAutoReset() {
 function cancelAutoReset() {
   clearTimeout(state.autoResetTimer);
   clearInterval(state.autoResetCountdown);
-  state.autoResetTimer = null;
-  state.autoResetCountdown = null;
-  const autoEl = $('done-auto');
-  const ring = $('done-auto-ring');
+  state.autoResetTimer = null; state.autoResetCountdown = null;
+  const autoEl = $('done-auto'), ring = $('done-auto-ring');
   if (autoEl) autoEl.textContent = '';
   if (ring) ring.classList.remove('show');
 }
 
-document.addEventListener('pointerdown', () => {
-  state.lastActivity = Date.now();
-}, { passive: true });
+document.addEventListener('pointerdown', () => { state.lastActivity = Date.now(); }, { passive: true });
 
-/* ─────────────────────────── PIN / Settings ───────────────── */
-function settingsTap() {
-  state.pinInput = '';
-  renderPin();
-  $('pin-overlay').classList.add('show');
-}
+function settingsTap() { state.pinInput = ''; renderPin(); $('pin-overlay').classList.add('show'); }
 function renderPin() {
   const dots = document.querySelectorAll('#pin-display .pin-dot');
   dots.forEach((d, i) => d.classList.toggle('filled', i < state.pinInput.length));
@@ -788,16 +625,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 function tryPin() {
-  if (state.pinInput === settings.pin) {
-    $('pin-overlay').classList.remove('show');
-    state.pinInput = '';
-    openSettings();
-  } else {
-    $('pin-display').classList.add('pin-error');
-    setTimeout(() => { state.pinInput = ''; renderPin(); }, 450);
-  }
+  if (state.pinInput === settings.pin) { $('pin-overlay').classList.remove('show'); state.pinInput = ''; openSettings(); }
+  else { $('pin-display').classList.add('pin-error'); setTimeout(() => { state.pinInput = ''; renderPin(); }, 450); }
 }
-
 function openSettings() {
   $('setting-duration').value = settings.duration;
   $('setting-camera').value = settings.camera;
@@ -860,18 +690,16 @@ function applyCoupleNames(full) {
   const i1 = (a || 'M').trim()[0] || 'M';
   const i2 = (b || 'J').trim()[0] || 'J';
   if (monoEl) monoEl.innerHTML = `${escapeHtml(i1)}<span style="color:var(--gold);">&</span>${escapeHtml(i2)}`;
-  if (doneMono) doneMono.innerHTML = `${escapeHtml(i1)}<span style="color:var(--gold-dark);">&</span>${escapeHtml(i2)}`;
+  if (doneMono) doneMono.innerHTML = `${escapeHtml(i1)}<span class="seal-amp">&</span>${escapeHtml(i2)}`;
   if (doneSecret) {
-    doneSecret.innerHTML = `Tu secreto viajará con nosotros…<br>hasta el momento en que ${escapeHtml(a)} y ${escapeHtml(b)}<br>quieran descubrirlo.`;
+    doneSecret.innerHTML = `Tu secreto viaja ahora con nosotros…<br>y llegará a ${escapeHtml(a)} y ${escapeHtml(b)}<br>en el momento más especial.`;
   }
   document.title = `El Confesionario · ${a}${b ? ' & ' + b : ''}`;
 }
 
-/* ─────────────────────────── Gallery ──────────────────────── */
 async function openGallery() {
   goScreen('gallery');
-  state.selectMode = false;
-  state.selectedIds.clear();
+  state.selectMode = false; state.selectedIds.clear();
   $('select-toggle').textContent = 'Seleccionar';
   await renderGallery();
 }
@@ -887,20 +715,14 @@ async function renderGallery() {
   const items = await dbGetAll();
   items.sort((a,b) => b.ts - a.ts);
   $('gallery-sub').textContent = `${items.length} ${items.length === 1 ? 'mensaje guardado' : 'mensajes guardados'}`;
-  if (items.length === 0) {
-    list.innerHTML = '<div class="gallery-empty">Todavía no hay mensajes guardados.</div>';
-    return;
-  }
+  if (items.length === 0) { list.innerHTML = '<div class="gallery-empty">Todavía no hay mensajes guardados.</div>'; return; }
   const enableButtons = (on) => { $('dl-selected').disabled = !on; $('del-selected').disabled = !on; };
   enableButtons(false);
   for (const it of items) {
     const card = document.createElement('div');
-    card.className = 'gcard';
-    card.dataset.id = it.id;
+    card.className = 'gcard'; card.dataset.id = it.id;
     if (it.type === 'audio') {
-      const ph = document.createElement('div');
-      ph.className = 'gcard-audio';
-      ph.textContent = '🎙';
+      const ph = document.createElement('div'); ph.className = 'gcard-audio'; ph.textContent = '🎙';
       card.appendChild(ph);
     } else {
       const thumb = document.createElement('video');
@@ -918,16 +740,12 @@ async function renderGallery() {
     const dstr = d.toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
     meta.innerHTML = `<b>${escapeHtml(it.guestName || 'Anónimo')}</b>${dstr} · ${humanSize(it.size)}`;
     card.appendChild(meta);
-    const sel = document.createElement('div');
-    sel.className = 'gcard-select';
+    const sel = document.createElement('div'); sel.className = 'gcard-select';
     card.appendChild(sel);
     card.addEventListener('click', () => {
       if (state.selectMode) {
-        if (state.selectedIds.has(it.id)) {
-          state.selectedIds.delete(it.id); card.classList.remove('selected'); sel.textContent = '';
-        } else {
-          state.selectedIds.add(it.id); card.classList.add('selected'); sel.textContent = '✓';
-        }
+        if (state.selectedIds.has(it.id)) { state.selectedIds.delete(it.id); card.classList.remove('selected'); sel.textContent = ''; }
+        else { state.selectedIds.add(it.id); card.classList.add('selected'); sel.textContent = '✓'; }
         enableButtons(state.selectedIds.size > 0);
       } else openPlayer(it.id);
     });
@@ -950,7 +768,7 @@ async function downloadSelected() {
 }
 async function deleteSelected() {
   if (state.selectedIds.size === 0) return;
-  if (!confirm(`¿Borrar ${state.selectedIds.size} mensaje(s)? No se puede deshacer.`)) return;
+  if (!confirm(`¿Borrar ${state.selectedIds.size} mensaje(s)?`)) return;
   for (const id of state.selectedIds) await dbDelete(id);
   state.selectedIds.clear();
   await renderGallery();
@@ -1008,7 +826,6 @@ function triggerDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-/* ─────────────────────────── Player modal ─────────────────── */
 async function openPlayer(id) {
   const rec = await dbGet(id);
   if (!rec) return;
@@ -1047,7 +864,6 @@ async function deleteCurrentPlaying() {
   toast('Mensaje borrado');
 }
 
-/* ─────────────────────────── Petals ───────────────────────── */
 function spawnPetals() {
   const layer = $('bg-layer');
   for (let i = 0; i < 7; i++) {
@@ -1062,7 +878,6 @@ function spawnPetals() {
   }
 }
 
-/* ─────────────────────────── Inactivity watcher (kiosk) ───── */
 setInterval(() => {
   if (!settings.kiosk) return;
   const now = Date.now();
@@ -1073,27 +888,19 @@ setInterval(() => {
   }
 }, 5000);
 
-/* ─────────────────────────── Init ─────────────────────────── */
 function init() {
   rotatePrompts();
   detectFormat();
   applySettingsToUI();
   setAudioOnly(false);
   bindStopHandlers();
-  dbCount().then(n => {
-    $('setting-count').textContent = n;
-    localStorage.setItem('confessionCount', n.toString());
-  });
+  dbCount().then(n => { $('setting-count').textContent = n; localStorage.setItem('confessionCount', n.toString()); });
   spawnPetals();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch((err) => console.log('SW error:', err));
   }
-  window.addEventListener('beforeunload', (e) => {
-    if (settings.kiosk) { e.preventDefault(); e.returnValue = ''; }
-  });
-  document.addEventListener('contextmenu', (e) => {
-    if (settings.kiosk) e.preventDefault();
-  });
+  window.addEventListener('beforeunload', (e) => { if (settings.kiosk) { e.preventDefault(); e.returnValue = ''; } });
+  document.addEventListener('contextmenu', (e) => { if (settings.kiosk) e.preventDefault(); });
   acquireWakeLock();
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
