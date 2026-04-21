@@ -1,6 +1,6 @@
 {
-  "name": "El Confesionario · Marta & Joaquín",
-  "short_name": "Confesionario M&J",
+  "name": "El Confesionario · Joaquín & Marta",
+  "short_name": "Confesionario J&M",
   "description": "Deja tu mensaje secreto a los novios en el día de su boda.",
   "start_url": "./index.html",
   "scope": "./",
@@ -14,26 +14,14 @@
   "categories": ["lifestyle", "entertainment", "utilities"],
   "icons": [
     {
-      "src": "icon192.png",
-      "sizes": "192x192",
+      "src": "logobodaJyM-removebg-preview.png",
+      "sizes": "192x192 512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "icon512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon512.png",
-      "sizes": "512x512",
+      "src": "logobodaJyM-removebg-preview.png",
+      "sizes": "192x192 512x512",
       "type": "image/png",
       "purpose": "maskable"
     }
@@ -43,7 +31,7 @@
       "name": "Grabar mensaje",
       "short_name": "Grabar",
       "url": "./index.html?action=record",
-      "icons": [{ "src": "icon192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "logobodaJyM-removebg-preview.png", "sizes": "192x192" }]
     }
   ]
 }
