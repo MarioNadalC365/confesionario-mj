@@ -1,12 +1,11 @@
 /* ════════════════════════════════════════════════════════════════════
-   EL CONFESIONARIO · Marta & Joaquín — app.js  (v2 arreglos)
-   Cambios respecto a v1:
-   • Preview OFF por defecto (flujo directo grabar → guardado → gracias)
+   EL CONFESIONARIO · Marta & Joaquín — app.js  (v3 arreglos)
+   • Preview OFF por defecto
    • Autorreinicio independiente del modo kiosco
-   • Pantalla "mensaje guardado" más prominente y visible más tiempo
-   • Modo kiosco con descripción clara + mínimo 5s autorreinicio
-   • Modo audio más visible (toggle grande + indicador durante grabación)
-   • Preview para audio muestra <audio> en lugar de <video>
+   • Botón Terminar a prueba de balas (JS binding + vibración + fallback)
+   • Pantalla final rediseñada con monograma firmado
+   • Modo audio visible con indicador durante grabación
+   • Preview audio con <audio> (no video negro)
 ════════════════════════════════════════════════════════════════════ */
 
 /* ─────────────────────────── State ────────────────────────── */
@@ -45,34 +44,32 @@ const DEFAULT_SETTINGS = {
   mirror: true,
   prompt: true,
   askName: false,
-  preview: false,          // v2: OFF por defecto — flujo directo
-  autoReset: true,         // v2: independiente de kiosco
-  autoresetSecs: 15,       // v2: default 15s (antes 45 y dentro de kiosco)
+  preview: false,
+  autoReset: true,
+  autoresetSecs: 15,
   kiosk: false,
   pin: '2468',
   mp4: true,
   names: 'Marta & Joaquín',
   saveToGallery: true,
 };
-const SETTINGS_KEY = 'confesionario.settings.v3';  // v3 por el cambio de forma
+const SETTINGS_KEY = 'confesionario.settings.v3';
 
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) {
-      // migración suave desde v2
       const v2 = localStorage.getItem('confesionario.settings.v2');
       if (v2) {
         try {
           const parsed = JSON.parse(v2);
-          const migrated = {
+          return {
             ...DEFAULT_SETTINGS,
             ...parsed,
-            preview: false,  // forzar default nuevo
+            preview: false,
             autoReset: true,
             autoresetSecs: Math.max(5, parsed.autoreset || 15),
           };
-          return migrated;
         } catch {}
       }
       return { ...DEFAULT_SETTINGS };
@@ -457,6 +454,9 @@ function reAnim(el) {
 /* ─────────────────────────── Recording ────────────────────── */
 function startRecording() {
   goScreen('recording');
+  bindStopHandlers();
+  const btn = $('btn-stop');
+  if (btn) { btn.style.opacity = ''; btn.disabled = false; }
   state.recordedChunks = [];
   state.isRecording = true;
 
@@ -499,18 +499,58 @@ function updateTimerDisplay() {
   el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
   el.classList.toggle('warning', sec <= 5);
 }
-function stopRecording() {
+function stopRecording(e) {
+  try { e?.preventDefault?.(); e?.stopPropagation?.(); } catch {}
   if (!state.isRecording) return;
+  console.log('[Confesionario] Deteniendo grabación');
   state.isRecording = false;
   clearInterval(state.timerInterval);
-  if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
-    state.mediaRecorder.stop();
+  state.timerInterval = null;
+
+  try { navigator.vibrate?.(60); } catch {}
+  const btn = $('btn-stop');
+  if (btn) { btn.style.opacity = '0.6'; btn.disabled = true; }
+
+  try {
+    if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+      state.mediaRecorder.stop();
+    }
+  } catch (err) {
+    console.warn('mediaRecorder.stop() lanzó:', err);
   }
+
   cleanupMicMeter();
-  if (state.mediaStream) {
-    state.mediaStream.getTracks().forEach(t => t.stop());
-    state.mediaStream = null;
-  }
+  setTimeout(() => {
+    try {
+      if (state.mediaStream) {
+        state.mediaStream.getTracks().forEach(t => t.stop());
+        state.mediaStream = null;
+      }
+    } catch {}
+  }, 120);
+
+  // Salvaguarda: si onstop no dispara en 3s, forzamos
+  setTimeout(() => {
+    const onRecording = document.querySelector('.screen.active')?.id === 'recording';
+    if (onRecording) {
+      console.warn('Fallback: forzando handleRecordingDone');
+      if (state.recordedChunks && state.recordedChunks.length > 0) handleRecordingDone();
+      else {
+        toast('No se pudo guardar (grabación vacía)', 'error');
+        goScreen('welcome');
+      }
+    }
+  }, 3000);
+}
+
+function bindStopHandlers() {
+  const btn = document.getElementById('btn-stop');
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = '1';
+  const handler = (e) => { stopRecording(e); };
+  btn.addEventListener('click', handler);
+  btn.addEventListener('touchend', handler, { passive: false });
+  btn.addEventListener('pointerup', handler);
 }
 
 /* ─────────────────────────── After recording ──────────────── */
@@ -530,8 +570,6 @@ async function handleRecordingDone() {
 function showPreview(blob) {
   if (state.playerObjectUrl) URL.revokeObjectURL(state.playerObjectUrl);
   state.playerObjectUrl = URL.createObjectURL(blob);
-
-  // Mostrar contenedor correcto según audio/video
   const vidC = $('preview-video-container');
   const audC = $('preview-audio-container');
   if (state.audioOnly) {
@@ -625,11 +663,9 @@ async function finalizeAndSave(rawBlob) {
     const filename = `confesion_${String(count).padStart(3,'0')}_${ts}${guestName ? '_' + safeName(guestName) : ''}.${ext}`;
     const record = {
       ts: now.getTime(),
-      filename,
-      ext,
+      filename, ext,
       type: isVideo ? 'video' : 'audio',
-      mime: finalBlob.type,
-      size: finalBlob.size,
+      mime: finalBlob.type, size: finalBlob.size,
       guestName: guestName || null,
       blob: finalBlob,
     };
@@ -640,12 +676,8 @@ async function finalizeAndSave(rawBlob) {
 
     let galleryOk = false;
     if (settings.saveToGallery) {
-      try {
-        triggerDownload(finalBlob, filename);
-        galleryOk = true;
-      } catch (dlErr) {
-        console.warn('Auto-descarga falló, mensaje sigue en la app', dlErr);
-      }
+      try { triggerDownload(finalBlob, filename); galleryOk = true; }
+      catch (dlErr) { console.warn('Auto-descarga falló', dlErr); }
     }
 
     setTimeout(() => {
@@ -653,8 +685,16 @@ async function finalizeAndSave(rawBlob) {
       const galleryMsg = settings.saveToGallery
         ? (galleryOk ? ' · también en la galería de la tablet' : ' · (no se pudo copiar a galería)')
         : '';
-      $('done-subtitle').textContent = guestName ? `¡Gracias, ${guestName}!` : '¡Gracias!';
-      $('msg-counter').textContent = `Mensaje nº ${totalCount} guardado en ${ext.toUpperCase()}${galleryMsg}`;
+      $('done-subtitle').textContent = guestName
+        ? `Gracias, ${guestName} ✨`
+        : '¡Gracias por tu confesión!';
+      const dateEl = $('done-signature-date');
+      if (dateEl) {
+        const d = new Date();
+        const dstr = d.toLocaleDateString('es-ES', { day:'numeric', month:'long', year:'numeric' });
+        dateEl.textContent = dstr;
+      }
+      $('msg-counter').textContent = `Confesión nº ${totalCount} · ${ext.toUpperCase()}${galleryMsg}`;
       $('setting-count').textContent = totalCount;
       launchConfetti();
       scheduleAutoReset();
@@ -692,31 +732,21 @@ function resetToWelcome() {
   setAudioOnly(false);
   goScreen('welcome');
 }
-
-/**
- * Auto-reset ahora es INDEPENDIENTE del modo kiosco.
- * Se activa si settings.autoReset === true (default), con mínimo 5s.
- */
 function scheduleAutoReset() {
   cancelAutoReset();
   if (!settings.autoReset) return;
   const secs = Math.max(5, Number(settings.autoresetSecs) || 15);
   let remaining = secs;
   const autoEl = $('done-auto');
-  autoEl.textContent = `Volviendo al inicio en ${remaining}s…`;
+  const ring = $('done-auto-ring');
+  if (ring) ring.classList.add('show');
+  autoEl.textContent = `Volviendo al inicio en ${remaining}s`;
   state.autoResetCountdown = setInterval(() => {
     remaining--;
-    if (remaining > 0) {
-      autoEl.textContent = `Volviendo al inicio en ${remaining}s…`;
-    } else {
-      clearInterval(state.autoResetCountdown);
-      state.autoResetCountdown = null;
-    }
+    if (remaining > 0) autoEl.textContent = `Volviendo al inicio en ${remaining}s`;
+    else { clearInterval(state.autoResetCountdown); state.autoResetCountdown = null; }
   }, 1000);
-  state.autoResetTimer = setTimeout(() => {
-    autoEl.textContent = '';
-    resetToWelcome();
-  }, secs * 1000);
+  state.autoResetTimer = setTimeout(() => { autoEl.textContent = ''; resetToWelcome(); }, secs * 1000);
 }
 function cancelAutoReset() {
   clearTimeout(state.autoResetTimer);
@@ -724,7 +754,9 @@ function cancelAutoReset() {
   state.autoResetTimer = null;
   state.autoResetCountdown = null;
   const autoEl = $('done-auto');
+  const ring = $('done-auto-ring');
   if (autoEl) autoEl.textContent = '';
+  if (ring) ring.classList.remove('show');
 }
 
 document.addEventListener('pointerdown', () => {
@@ -747,16 +779,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = e.target.closest('.pin-key');
     if (!btn) return;
     const k = btn.dataset.k;
-    if (k === 'cancel') {
-      $('pin-overlay').classList.remove('show');
-      state.pinInput = '';
-      return;
-    }
-    if (k === 'back') {
-      state.pinInput = state.pinInput.slice(0, -1);
-      renderPin();
-      return;
-    }
+    if (k === 'cancel') { $('pin-overlay').classList.remove('show'); state.pinInput = ''; return; }
+    if (k === 'back') { state.pinInput = state.pinInput.slice(0, -1); renderPin(); return; }
     if (state.pinInput.length >= 4) return;
     state.pinInput += k;
     renderPin();
@@ -828,17 +852,17 @@ function applyCoupleNames(full) {
   const titleEl = document.querySelector('.welcome-title');
   const monoEl = document.querySelector('.monogram');
   const doneSecret = $('done-secret');
+  const doneMono = $('done-monogram');
   if (titleEl) {
     if (b) titleEl.innerHTML = `${escapeHtml(a)}<span class="amp">&</span>${escapeHtml(b)}`;
     else titleEl.textContent = a;
   }
-  if (monoEl) {
-    const i1 = (a || 'M').trim()[0] || 'M';
-    const i2 = (b || 'J').trim()[0] || 'J';
-    monoEl.innerHTML = `${escapeHtml(i1)}<span style="color:var(--gold);">&</span>${escapeHtml(i2)}`;
-  }
+  const i1 = (a || 'M').trim()[0] || 'M';
+  const i2 = (b || 'J').trim()[0] || 'J';
+  if (monoEl) monoEl.innerHTML = `${escapeHtml(i1)}<span style="color:var(--gold);">&</span>${escapeHtml(i2)}`;
+  if (doneMono) doneMono.innerHTML = `${escapeHtml(i1)}<span style="color:var(--gold-dark);">&</span>${escapeHtml(i2)}`;
   if (doneSecret) {
-    doneSecret.innerHTML = `Tu secreto está a salvo con nosotros…<br>${escapeHtml(a)} y ${escapeHtml(b)} lo descubrirán en un momento muy especial.`;
+    doneSecret.innerHTML = `Tu secreto viajará con nosotros…<br>hasta el momento en que ${escapeHtml(a)} y ${escapeHtml(b)}<br>quieran descubrirlo.`;
   }
   document.title = `El Confesionario · ${a}${b ? ' & ' + b : ''}`;
 }
@@ -851,10 +875,7 @@ async function openGallery() {
   $('select-toggle').textContent = 'Seleccionar';
   await renderGallery();
 }
-function closeGallery() {
-  revokeGalleryUrls();
-  goScreen('welcome');
-}
+function closeGallery() { revokeGalleryUrls(); goScreen('welcome'); }
 function revokeGalleryUrls() {
   state.galleryObjectUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch {} });
   state.galleryObjectUrls = [];
@@ -865,16 +886,12 @@ async function renderGallery() {
   list.innerHTML = '';
   const items = await dbGetAll();
   items.sort((a,b) => b.ts - a.ts);
-  $('gallery-sub').textContent =
-    `${items.length} ${items.length === 1 ? 'mensaje guardado' : 'mensajes guardados'}`;
+  $('gallery-sub').textContent = `${items.length} ${items.length === 1 ? 'mensaje guardado' : 'mensajes guardados'}`;
   if (items.length === 0) {
     list.innerHTML = '<div class="gallery-empty">Todavía no hay mensajes guardados.</div>';
     return;
   }
-  const enableButtons = (on) => {
-    $('dl-selected').disabled = !on;
-    $('del-selected').disabled = !on;
-  };
+  const enableButtons = (on) => { $('dl-selected').disabled = !on; $('del-selected').disabled = !on; };
   enableButtons(false);
   for (const it of items) {
     const card = document.createElement('div');
@@ -888,15 +905,11 @@ async function renderGallery() {
     } else {
       const thumb = document.createElement('video');
       thumb.className = 'gcard-thumb';
-      thumb.muted = true;
-      thumb.playsInline = true;
-      thumb.preload = 'metadata';
+      thumb.muted = true; thumb.playsInline = true; thumb.preload = 'metadata';
       const url = URL.createObjectURL(it.blob);
       state.galleryObjectUrls.push(url);
       thumb.src = url;
-      thumb.addEventListener('loadeddata', () => {
-        try { thumb.currentTime = 0.1; } catch {}
-      });
+      thumb.addEventListener('loadeddata', () => { try { thumb.currentTime = 0.1; } catch {} });
       card.appendChild(thumb);
     }
     const meta = document.createElement('div');
@@ -911,18 +924,12 @@ async function renderGallery() {
     card.addEventListener('click', () => {
       if (state.selectMode) {
         if (state.selectedIds.has(it.id)) {
-          state.selectedIds.delete(it.id);
-          card.classList.remove('selected');
-          sel.textContent = '';
+          state.selectedIds.delete(it.id); card.classList.remove('selected'); sel.textContent = '';
         } else {
-          state.selectedIds.add(it.id);
-          card.classList.add('selected');
-          sel.textContent = '✓';
+          state.selectedIds.add(it.id); card.classList.add('selected'); sel.textContent = '✓';
         }
         enableButtons(state.selectedIds.size > 0);
-      } else {
-        openPlayer(it.id);
-      }
+      } else openPlayer(it.id);
     });
     list.appendChild(card);
   }
@@ -933,22 +940,17 @@ function toggleSelectMode() {
   $('select-toggle').textContent = state.selectMode ? 'Cancelar' : 'Seleccionar';
   document.querySelectorAll('.gcard').forEach(c => c.classList.remove('selected'));
   document.querySelectorAll('.gcard-select').forEach(s => s.textContent = '');
-  $('dl-selected').disabled = true;
-  $('del-selected').disabled = true;
+  $('dl-selected').disabled = true; $('del-selected').disabled = true;
 }
 async function downloadSelected() {
   if (state.selectedIds.size === 0) return;
   const ids = [...state.selectedIds];
-  if (ids.length === 1) {
-    const rec = await dbGet(ids[0]);
-    triggerDownload(rec.blob, rec.filename);
-    return;
-  }
+  if (ids.length === 1) { const rec = await dbGet(ids[0]); triggerDownload(rec.blob, rec.filename); return; }
   await exportSomeAsZip(ids, `confesionario_seleccion_${tsStamp(new Date())}.zip`);
 }
 async function deleteSelected() {
   if (state.selectedIds.size === 0) return;
-  if (!confirm(`¿Borrar ${state.selectedIds.size} mensaje(s)? Esta acción no se puede deshacer.`)) return;
+  if (!confirm(`¿Borrar ${state.selectedIds.size} mensaje(s)? No se puede deshacer.`)) return;
   for (const id of state.selectedIds) await dbDelete(id);
   state.selectedIds.clear();
   await renderGallery();
@@ -985,10 +987,7 @@ async function exportSomeAsZip(ids, filename) {
     const blob = await zip.generateAsync({ type: 'blob' });
     triggerDownload(blob, filename);
     toast('ZIP descargado ✓', 'success');
-  } catch (e) {
-    console.error(e);
-    toast('Error al generar ZIP: ' + e.message, 'error');
-  }
+  } catch (e) { console.error(e); toast('Error al generar ZIP: ' + e.message, 'error'); }
 }
 function loadJSZip() {
   if (window.JSZip) return Promise.resolve();
@@ -1020,8 +1019,7 @@ async function openPlayer(id) {
   let mediaEl;
   if (rec.type === 'audio') { mediaEl = document.createElement('audio'); mediaEl.controls = true; }
   else { mediaEl = document.createElement('video'); mediaEl.controls = true; mediaEl.playsInline = true; }
-  mediaEl.src = url;
-  mediaEl.dataset.objectUrl = url;
+  mediaEl.src = url; mediaEl.dataset.objectUrl = url;
   body.appendChild(mediaEl);
   $('player-title').textContent = `${rec.guestName || 'Anónimo'} · ${new Date(rec.ts).toLocaleString('es-ES')}`;
   $('player-modal').classList.add('show');
@@ -1030,10 +1028,7 @@ async function openPlayer(id) {
 function closePlayer() {
   const body = $('player-body');
   const media = body.querySelector('video, audio');
-  if (media) {
-    media.pause();
-    if (media.dataset.objectUrl) URL.revokeObjectURL(media.dataset.objectUrl);
-  }
+  if (media) { media.pause(); if (media.dataset.objectUrl) URL.revokeObjectURL(media.dataset.objectUrl); }
   body.innerHTML = '';
   $('player-modal').classList.remove('show');
   state.currentPlayingId = null;
@@ -1055,8 +1050,7 @@ async function deleteCurrentPlaying() {
 /* ─────────────────────────── Petals ───────────────────────── */
 function spawnPetals() {
   const layer = $('bg-layer');
-  const count = 7;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < 7; i++) {
     const p = document.createElement('div');
     p.className = 'petal';
     p.style.left = Math.random() * 100 + '%';
@@ -1085,6 +1079,7 @@ function init() {
   detectFormat();
   applySettingsToUI();
   setAudioOnly(false);
+  bindStopHandlers();
   dbCount().then(n => {
     $('setting-count').textContent = n;
     localStorage.setItem('confessionCount', n.toString());
@@ -1101,8 +1096,5 @@ function init() {
   });
   acquireWakeLock();
 }
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
