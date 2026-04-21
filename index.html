@@ -661,12 +661,12 @@
   .player-actions { display: flex; gap: 0.6rem; justify-content: center; padding-top: 0.8rem; flex-wrap: wrap; }
 
   .settings-btn {
-    position: fixed; bottom: calc(0.8rem + var(--safe-bot)); right: 0.8rem;
+    position: fixed; bottom: calc(0.8rem + var(--safe-bot)); left: 0.8rem;
     z-index: 100; background: rgba(0,0,0,0.12); border: none;
-    border-radius: 50%; width: 44px; height: 44px;
+    border-radius: 50%; width: 38px; height: 38px;
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 1.2rem; color: #555;
-    opacity: 0.45; transition: opacity 0.3s, transform 0.3s;
+    cursor: pointer; font-size: 1rem; color: #555;
+    opacity: 0.35; transition: opacity 0.3s, transform 0.3s;
   }
   .settings-btn:active { opacity: 1; transform: rotate(45deg); }
   .settings-btn.hidden { display: none; }
@@ -1065,7 +1065,7 @@
     <h4>El día de la boda</h4>
     <div class="setting-row"><label>Modo kiosco <span class="hint">Bloquea salida del navegador y reinicia si hay inactividad. Actívalo solo el día del evento.</span></label><label class="switch"><input type="checkbox" id="setting-kiosk"><span class="slider"></span></label></div>
     <div class="setting-row"><label>Guardar en galería de la tablet <span class="hint">Auto-descarga a carpeta Descargas (Android la indexa)</span></label><label class="switch"><input type="checkbox" id="setting-savegallery" checked><span class="slider"></span></label></div>
-    <div class="setting-row"><label>PIN de ajustes <span class="hint">4 dígitos · por defecto 2468</span></label><input type="text" id="setting-pin" maxlength="4" pattern="[0-9]*" inputmode="numeric" style="letter-spacing:0.4em;"></div>
+    <div class="setting-row"><label>PIN de ajustes <span class="hint">4 dígitos · por defecto 2004</span></label><input type="text" id="setting-pin" maxlength="4" pattern="[0-9]*" inputmode="numeric" style="letter-spacing:0.4em;"></div>
 
     <h4>Personalización</h4>
     <div class="setting-row"><label>Nombres de los novios</label><input type="text" id="setting-names" maxlength="60" style="width:180px;"></div>
@@ -1080,7 +1080,7 @@
 
 <div class="watermark">M&J · El Confesionario</div>
 <div class="toast" id="toast"></div>
-<div class="version-tag">v4.2</div>
+<div class="version-tag">v4.3</div>
 
 <script src="app.js"></script>
 </body>

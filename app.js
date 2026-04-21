@@ -1,4 +1,4 @@
-/* EL CONFESIONARIO · Marta & Joaquín — app.js v4.1 */
+/* EL CONFESIONARIO · Marta & Joaquín — app.js v4.3 */
 
 const state = {
   mediaStream: null, mediaRecorder: null, recordedChunks: [],
@@ -15,7 +15,6 @@ const state = {
   recordingDoneCalled: false,
 };
 
-/* ── Debug log visible en pantalla ── */
 const dbgLines = [];
 function dbg(...args) {
   const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
@@ -30,7 +29,7 @@ const DEFAULT_SETTINGS = {
   duration: 30, camera: 'user', mirror: true,
   prompt: true, askName: false, preview: false,
   autoReset: true, autoresetSecs: 15,
-  kiosk: false, pin: '2468', mp4: true,
+  kiosk: false, pin: '2004', mp4: true,
   names: 'Marta & Joaquín', saveToGallery: true,
 };
 const SETTINGS_KEY = 'confesionario.settings.v3';
@@ -433,7 +432,6 @@ function bindStopHandlers() {
   btn.addEventListener('click', handler);
   btn.addEventListener('touchend', handler, { passive: false });
   btn.addEventListener('pointerup', handler);
-  // También enlazamos la zona entera de recording-bottom
   const zone = document.getElementById('recording-bottom');
   if (zone && !zone.dataset.bound) {
     zone.dataset.bound = '1';
@@ -599,6 +597,8 @@ function resetToWelcome() {
   const logEl = $('recording-log');
   if (logEl) { logEl.classList.remove('show'); logEl.textContent = ''; }
   dbgLines.length = 0;
+  // Re-aplicar ajustes para refrescar textos como "Tienes X segundos"
+  applySettingsToUI();
   goScreen('welcome');
 }
 function scheduleAutoReset() {
@@ -692,9 +692,16 @@ function saveAndClose() {
   toast('Ajustes guardados', 'success');
 }
 function applySettingsToUI() {
-  $('wl-duration').textContent = settings.duration;
-  $('name-wrap').classList.toggle('hidden', !settings.askName);
-  $('kiosk-badge').classList.toggle('show', !!settings.kiosk);
+  // Actualizar todas las apariciones de la duración en los textos visibles
+  document.querySelectorAll('[data-duration]').forEach(el => {
+    el.textContent = settings.duration;
+  });
+  const wl = $('wl-duration');
+  if (wl) wl.textContent = settings.duration;
+  const namWrap = $('name-wrap');
+  if (namWrap) namWrap.classList.toggle('hidden', !settings.askName);
+  const kb = $('kiosk-badge');
+  if (kb) kb.classList.toggle('show', !!settings.kiosk);
   applyCoupleNames(settings.names);
 }
 function applyCoupleNames(full) {
