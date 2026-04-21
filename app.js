@@ -2,7 +2,7 @@
    EL CONFESIONARIO · Marta & Joaquín — app.js
    Características:
    • Modo kiosco con PIN
-   • Almacenamiento en IndexedDB (+ export ZIP)
+   • Almacenamiento en IndexedDB + auto-descarga a la galería
    • Preview antes de guardar
    • Solo audio opcional
    • Sugerencias de preguntas
@@ -52,6 +52,7 @@ const DEFAULT_SETTINGS = {
   pin: '2468',
   mp4: true,
   names: 'Marta & Joaquín',
+  saveToGallery: true, // Auto-descarga a Descargas → indexado por la galería de Android
 };
 const SETTINGS_KEY = 'confesionario.settings.v2';
 
@@ -595,9 +596,23 @@ async function finalizeAndSave(rawBlob) {
     const totalCount = await dbCount();
     localStorage.setItem('confessionCount', totalCount.toString());
 
+    // Auto-descarga a la carpeta Descargas (indexada por la galería de Android / Google Fotos)
+    let galleryOk = false;
+    if (settings.saveToGallery) {
+      try {
+        triggerDownload(finalBlob, filename);
+        galleryOk = true;
+      } catch (dlErr) {
+        console.warn('Auto-descarga falló, mensaje sigue en la app', dlErr);
+      }
+    }
+
     setTimeout(() => {
       goScreen('done');
-      $('msg-counter').textContent = `Mensaje nº ${totalCount} guardado en ${ext.toUpperCase()}`;
+      const galleryMsg = settings.saveToGallery
+        ? (galleryOk ? ' · también en Descargas/Galería' : ' · (no se pudo copiar a Descargas)')
+        : '';
+      $('msg-counter').textContent = `Mensaje nº ${totalCount} guardado en ${ext.toUpperCase()}${galleryMsg}`;
       $('setting-count').textContent = totalCount;
       launchConfetti();
       scheduleAutoReset();
@@ -719,6 +734,7 @@ function openSettings() {
   $('setting-pin').value = settings.pin;
   $('setting-mp4').checked = !!settings.mp4;
   $('setting-names').value = settings.names;
+  $('setting-savegallery').checked = !!settings.saveToGallery;
   dbCount().then(n => $('setting-count').textContent = n);
   $('settings-panel').classList.add('show');
 }
@@ -738,6 +754,7 @@ function saveAndClose() {
     pin: newPin,
     mp4: $('setting-mp4').checked,
     names: ($('setting-names').value || 'Marta & Joaquín').trim(),
+    saveToGallery: $('setting-savegallery').checked,
   };
   saveSettings(settings);
   applySettingsToUI();
@@ -1037,7 +1054,6 @@ function init() {
   });
   acquireWakeLock();
 }
-// Call init after DOM is ready (safer for external script, even if defer is not set)
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
