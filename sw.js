@@ -1,12 +1,6 @@
-/* El Confesionario · Service Worker
- * Estrategias:
- *   - App shell (mismo origen): cache-first con actualización en background.
- *   - CDN (jsdelivr, googleapis, gstatic): stale-while-revalidate, runtime cache.
- *   - Resto (distinto origen no allowlisted): network-only.
- * Offline: si todo falla, servimos index.html del cache.
- */
+/* El Confesionario · Service Worker v4.1 */
 
-const VERSION = 'v3-2026-04-21';
+const VERSION = 'v4.1-2026-04-21';
 const APP_CACHE = `confesionario-app-${VERSION}`;
 const RUNTIME_CACHE = `confesionario-runtime-${VERSION}`;
 

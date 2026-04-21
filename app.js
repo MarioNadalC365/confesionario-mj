@@ -1,4 +1,4 @@
-/* EL CONFESIONARIO · Marta & Joaquín — app.js v4 */
+/* EL CONFESIONARIO · Marta & Joaquín — app.js v4.1 */
 
 const state = {
   mediaStream: null, mediaRecorder: null, recordedChunks: [],
@@ -12,7 +12,19 @@ const state = {
   selectMode: false, selectedIds: new Set(),
   currentPlayingId: null, lastActivity: Date.now(),
   playerObjectUrl: null, galleryObjectUrls: [],
+  recordingDoneCalled: false,
 };
+
+/* ── Debug log visible en pantalla ── */
+const dbgLines = [];
+function dbg(...args) {
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  console.log('[Confes]', ...args);
+  dbgLines.push(new Date().toLocaleTimeString().slice(-5) + ' ' + msg);
+  if (dbgLines.length > 8) dbgLines.shift();
+  const el = document.getElementById('recording-log');
+  if (el) el.textContent = dbgLines.join('\n');
+}
 
 const DEFAULT_SETTINGS = {
   duration: 30, camera: 'user', mirror: true,
@@ -325,11 +337,14 @@ async function startCountdown() {
 function reAnim(el) { el.style.animation = 'none'; void el.offsetWidth; el.style.animation = 'pulse-in 0.7s ease-out'; }
 
 function startRecording() {
-  console.log('[Confes] startRecording');
+  dbg('startRecording');
   goScreen('recording');
   bindStopHandlers();
+  state.recordingDoneCalled = false;
   const btn = $('btn-stop');
   if (btn) { btn.style.opacity = ''; btn.disabled = false; }
+  const logEl = $('recording-log');
+  if (logEl) logEl.classList.add('show');
   state.recordedChunks = [];
   state.lastBlob = null;
   state.isRecording = true;
@@ -347,18 +362,15 @@ function startRecording() {
   catch { state.mediaRecorder = new MediaRecorder(state.mediaStream); }
 
   state.mediaRecorder.ondataavailable = (e) => {
-    if (e.data && e.data.size > 0) {
-      state.recordedChunks.push(e.data);
-      console.log('[Confes] chunk total=', state.recordedChunks.length);
-    }
+    if (e.data && e.data.size > 0) state.recordedChunks.push(e.data);
   };
   state.mediaRecorder.onstop = () => {
-    console.log('[Confes] onstop · chunks=', state.recordedChunks.length);
+    dbg('onstop chunks=', state.recordedChunks.length);
     cleanupMicMeter();
     try { if (state.mediaStream) { state.mediaStream.getTracks().forEach(t => t.stop()); state.mediaStream = null; } } catch {}
     handleRecordingDone();
   };
-  state.mediaRecorder.onerror = (ev) => { console.error('[Confes] mediaRecorder.onerror', ev); };
+  state.mediaRecorder.onerror = (ev) => { dbg('onerror', ev?.error?.name || ev); };
   state.mediaRecorder.start(100);
 
   state.timeLeft = settings.duration;
@@ -383,8 +395,8 @@ function updateTimerDisplay() {
 
 function stopRecording(e) {
   try { e?.preventDefault?.(); e?.stopPropagation?.(); } catch {}
-  if (!state.isRecording) { console.log('[Confes] stopRecording: ya no recording'); return; }
-  console.log('[Confes] stopRecording INICIO');
+  dbg('stopRecording llamado');
+  if (!state.isRecording) { dbg('stop: ya no recording'); return; }
   state.isRecording = false;
   clearInterval(state.timerInterval);
   state.timerInterval = null;
@@ -393,23 +405,21 @@ function stopRecording(e) {
   const btn = $('btn-stop');
   if (btn) { btn.style.opacity = '0.6'; btn.disabled = true; }
 
-  // Feedback inmediato al usuario: saving ya
   goScreen('saving');
   const savingText = $('saving-text');
   if (savingText) savingText.textContent = 'Procesando tu mensaje…';
 
   try {
     if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
-      console.log('[Confes] mediaRecorder.stop()');
+      dbg('mediaRecorder.stop()');
       state.mediaRecorder.stop();
-    } else { console.warn('[Confes] mediaRecorder inactivo'); }
-  } catch (err) { console.warn('[Confes] stop() lanzó:', err); }
+    } else { dbg('mediaRecorder ya inactivo'); }
+  } catch (err) { dbg('stop() lanzó:', err?.message || err); }
 
-  // Salvaguarda: si pasan 4s en saving sin blob, forzamos
   setTimeout(() => {
     const active = document.querySelector('.screen.active')?.id;
     if (active === 'saving' && !state.lastBlob) {
-      console.warn('[Confes] Fallback: forzando handleRecordingDone');
+      dbg('FALLBACK forzado');
       handleRecordingDone();
     }
   }, 4000);
@@ -419,13 +429,23 @@ function bindStopHandlers() {
   const btn = document.getElementById('btn-stop');
   if (!btn || btn.dataset.bound) return;
   btn.dataset.bound = '1';
-  const handler = (e) => { stopRecording(e); };
+  const handler = (e) => { try { stopRecording(e); } catch (err) { dbg('handler err:', err?.message); } };
   btn.addEventListener('click', handler);
   btn.addEventListener('touchend', handler, { passive: false });
   btn.addEventListener('pointerup', handler);
+  // También enlazamos la zona entera de recording-bottom
+  const zone = document.getElementById('recording-bottom');
+  if (zone && !zone.dataset.bound) {
+    zone.dataset.bound = '1';
+    zone.addEventListener('click', handler);
+    zone.addEventListener('touchend', handler, { passive: false });
+  }
 }
 
 async function handleRecordingDone() {
+  if (state.recordingDoneCalled) { dbg('handleRecordingDone ya llamado'); return; }
+  state.recordingDoneCalled = true;
+  dbg('handleRecordingDone chunks=', state.recordedChunks.length);
   const rawBlob = new Blob(state.recordedChunks, {
     type: state.audioOnly ? (detectAudioFormat().mime || 'audio/webm') : (state.chosenMimeType || 'video/webm')
   });
@@ -470,7 +490,7 @@ async function confirmSave() {
 }
 
 async function finalizeAndSave(rawBlob) {
-  console.log('[Confes] finalizeAndSave, size=', rawBlob?.size);
+  dbg('finalizeAndSave size=', rawBlob?.size);
   state.lastBlob = rawBlob;
   if (document.querySelector('.screen.active')?.id !== 'saving') goScreen('saving');
   const savingText = $('saving-text'), savingSub = $('saving-sub'), bar = $('saving-progress-fill');
@@ -499,9 +519,9 @@ async function finalizeAndSave(rawBlob) {
       const data = await ffmpeg.readFile('output.mp4');
       finalBlob = new Blob([data.buffer], { type: 'video/mp4' });
       ext = 'mp4';
-      console.log('[Confes] MP4 conversion OK');
+      dbg('MP4 OK');
     } catch (e) {
-      console.warn('[Confes] MP4 falló, keeping original:', e);
+      dbg('MP4 falló');
       ext = state.chosenExtension;
     }
   }
@@ -525,16 +545,15 @@ async function finalizeAndSave(rawBlob) {
     dbOk = true;
     totalCount = await dbCount();
     localStorage.setItem('confessionCount', totalCount.toString());
-    console.log('[Confes] IndexedDB OK, total=', totalCount);
-  } catch (e) { console.error('[Confes] IndexedDB error:', e); }
+    dbg('DB OK total=', totalCount);
+  } catch (e) { dbg('DB error'); }
 
   if (settings.saveToGallery && filename) {
-    try { triggerDownload(finalBlob, filename); console.log('[Confes] descarga disparada'); }
-    catch (dlErr) { console.warn('[Confes] descarga falló:', dlErr); }
+    try { triggerDownload(finalBlob, filename); dbg('descarga disparada'); }
+    catch (dlErr) { dbg('descarga falló'); }
   }
   if (bar) bar.style.width = '100%';
 
-  // SIEMPRE ir a done
   setTimeout(() => {
     try {
       goScreen('done');
@@ -553,7 +572,7 @@ async function finalizeAndSave(rawBlob) {
       scheduleAutoReset();
       const gn = $('guest-name');
       if (gn) gn.value = '';
-    } catch (finalErr) { console.error('[Confes] Error done:', finalErr); goScreen('done'); }
+    } catch (finalErr) { dbg('Error done:', finalErr?.message); goScreen('done'); }
   }, 350);
 }
 
@@ -577,6 +596,9 @@ function resetToWelcome() {
   $('progress-bar').style.width = '0%';
   $('timer').classList.remove('warning');
   setAudioOnly(false);
+  const logEl = $('recording-log');
+  if (logEl) { logEl.classList.remove('show'); logEl.textContent = ''; }
+  dbgLines.length = 0;
   goScreen('welcome');
 }
 function scheduleAutoReset() {
