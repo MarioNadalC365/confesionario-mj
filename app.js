@@ -1,4 +1,4 @@
-/* EL CONFESIONARIO · Joaquín & Marta — app.js v4.8 */
+/* EL CONFESIONARIO · Joaquín & Marta — app.js v5.3 (flujo silencioso, auto-reset 5s) */
 
 const state = {
   mediaStream: null, mediaRecorder: null, recordedChunks: [],
@@ -15,22 +15,14 @@ const state = {
   recordingDoneCalled: false,
 };
 
-const dbgLines = [];
-function dbg(...args) {
-  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
-  console.log('[Confes]', ...args);
-  dbgLines.push(new Date().toLocaleTimeString().slice(-5) + ' ' + msg);
-  if (dbgLines.length > 8) dbgLines.shift();
-  const el = document.getElementById('recording-log');
-  if (el) el.textContent = dbgLines.join('\n');
-}
+function dbg(...args) { try { console.log('[Confes]', ...args); } catch {} }
 
 const DEFAULT_SETTINGS = {
   duration: 30, camera: 'user', mirror: true,
   prompt: true, askName: false, preview: false,
-  autoReset: true, autoresetSecs: 15,
+  autoReset: true, autoresetSecs: 5,
   kiosk: false, pin: '2004', mp4: true,
-  names: 'Joaquín & Marta', saveToGallery: true,
+  names: 'Joaquín & Marta', saveToGallery: false,
   logo: 'color',
   weddingDate: '03 · 10 · 2026',
 };
@@ -45,7 +37,8 @@ function loadSettings() {
         try {
           const parsed = JSON.parse(v2);
           return { ...DEFAULT_SETTINGS, ...parsed, preview: false, autoReset: true,
-            autoresetSecs: Math.max(5, parsed.autoreset || 15) };
+            autoresetSecs: Math.max(5, parsed.autoreset || 5),
+            saveToGallery: false };
         } catch {}
       }
       return { ...DEFAULT_SETTINGS };
@@ -344,8 +337,6 @@ function startRecording() {
   state.recordingDoneCalled = false;
   const btn = $('btn-stop');
   if (btn) { btn.style.opacity = ''; btn.disabled = false; }
-  const logEl = $('recording-log');
-  if (logEl) logEl.classList.add('show');
   state.recordedChunks = [];
   state.lastBlob = null;
   state.isRecording = true;
@@ -396,34 +387,20 @@ function updateTimerDisplay() {
 
 function stopRecording(e) {
   try { e?.preventDefault?.(); e?.stopPropagation?.(); } catch {}
-  dbg('stopRecording llamado');
-  if (!state.isRecording) { dbg('stop: ya no recording'); return; }
+  if (!state.isRecording) return;
+  dbg('stopRecording');
   state.isRecording = false;
   clearInterval(state.timerInterval);
   state.timerInterval = null;
-
   try { navigator.vibrate?.(60); } catch {}
   const btn = $('btn-stop');
   if (btn) { btn.style.opacity = '0.6'; btn.disabled = true; }
-
-  goScreen('saving');
-  const savingText = $('saving-text');
-  if (savingText) savingText.textContent = 'Procesando tu mensaje…';
-
   try {
-    if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
-      dbg('mediaRecorder.stop()');
-      state.mediaRecorder.stop();
-    } else { dbg('mediaRecorder ya inactivo'); }
-  } catch (err) { dbg('stop() lanzó:', err?.message || err); }
-
+    if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') state.mediaRecorder.stop();
+  } catch (err) { dbg('stop() err', err?.message); }
   setTimeout(() => {
-    const active = document.querySelector('.screen.active')?.id;
-    if (active === 'saving' && !state.lastBlob) {
-      dbg('FALLBACK forzado');
-      handleRecordingDone();
-    }
-  }, 4000);
+    if (!state.recordingDoneCalled) { dbg('FALLBACK'); handleRecordingDone(); }
+  }, 3500);
 }
 
 function bindStopHandlers() {
@@ -442,16 +419,20 @@ function bindStopHandlers() {
   }
 }
 
-async function handleRecordingDone() {
-  if (state.recordingDoneCalled) { dbg('ya llamado'); return; }
+function handleRecordingDone() {
+  if (state.recordingDoneCalled) return;
   state.recordingDoneCalled = true;
-  dbg('handleRecordingDone chunks=', state.recordedChunks.length);
+  const isAudioOnly = state.audioOnly;
   const rawBlob = new Blob(state.recordedChunks, {
-    type: state.audioOnly ? (detectAudioFormat().mime || 'audio/webm') : (state.chosenMimeType || 'video/webm')
+    type: isAudioOnly ? (detectAudioFormat().mime || 'audio/webm') : (state.chosenMimeType || 'video/webm')
   });
+  const guestName = ($('guest-name')?.value || '').trim();
+  const extFallback = state.lastExt;
   if (settings.preview) { state.lastBlob = rawBlob; showPreview(rawBlob); return; }
-  await finalizeAndSave(rawBlob);
+  showDoneScreen(guestName);
+  saveInBackground(rawBlob, isAudioOnly, guestName, extFallback);
 }
+
 function showPreview(blob) {
   if (state.playerObjectUrl) URL.revokeObjectURL(state.playerObjectUrl);
   state.playerObjectUrl = URL.createObjectURL(blob);
@@ -486,24 +467,35 @@ async function confirmSave() {
   try { a.pause(); a.removeAttribute('src'); a.load(); } catch {}
   if (state.playerObjectUrl) { URL.revokeObjectURL(state.playerObjectUrl); state.playerObjectUrl = null; }
   if (!state.lastBlob) { resetToWelcome(); return; }
-  await finalizeAndSave(state.lastBlob);
+  const blob = state.lastBlob;
+  const guestName = ($('guest-name')?.value || '').trim();
+  const isAudioOnly = state.audioOnly;
+  showDoneScreen(guestName);
+  saveInBackground(blob, isAudioOnly, guestName, state.lastExt);
 }
 
-async function finalizeAndSave(rawBlob) {
-  dbg('finalizeAndSave size=', rawBlob?.size);
-  state.lastBlob = rawBlob;
-  if (document.querySelector('.screen.active')?.id !== 'saving') goScreen('saving');
-  const savingText = $('saving-text'), savingSub = $('saving-sub'), bar = $('saving-progress-fill');
-  if (bar) bar.style.width = '10%';
-  const isVideo = !state.audioOnly;
-  let finalBlob = rawBlob;
-  let ext = state.lastExt;
-  const guestName = ($('guest-name')?.value || '').trim();
+function showDoneScreen(guestName) {
+  goScreen('done');
+  const subtitle = $('done-subtitle');
+  if (subtitle) subtitle.textContent = guestName ? `Gracias, ${guestName} ✨` : '¡Gracias de corazón!';
+  const dateEl = $('done-signature-date');
+  if (dateEl) {
+    const d = new Date();
+    dateEl.textContent = d.toLocaleDateString('es-ES', { day:'numeric', month:'long', year:'numeric' });
+  }
+  const counter = $('msg-counter');
+  if (counter) counter.textContent = '';
+  launchConfetti();
+  scheduleAutoReset();
+  const gn = $('guest-name');
+  if (gn) gn.value = '';
+}
 
+async function saveInBackground(rawBlob, isAudioOnly, guestName, extFallback) {
+  let finalBlob = rawBlob;
+  let ext = extFallback;
+  const isVideo = !isAudioOnly;
   if (isVideo && settings.mp4 && state.chosenExtension !== 'mp4') {
-    if (savingText) savingText.textContent = 'Convirtiendo a MP4…';
-    if (savingSub) savingSub.textContent = 'Esto puede tardar unos segundos.';
-    if (bar) bar.style.width = '30%';
     try {
       const { FFmpeg } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/+esm');
       const { fetchFile } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/+esm');
@@ -512,68 +504,39 @@ async function finalizeAndSave(rawBlob) {
         coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js',
         wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm',
       });
-      if (bar) bar.style.width = '55%';
       await ffmpeg.writeFile('input.webm', await fetchFile(rawBlob));
       await ffmpeg.exec(['-i','input.webm','-c:v','libx264','-preset','ultrafast','-crf','28','-c:a','aac','-b:a','128k','-movflags','+faststart','output.mp4']);
-      if (bar) bar.style.width = '85%';
       const data = await ffmpeg.readFile('output.mp4');
       finalBlob = new Blob([data.buffer], { type: 'video/mp4' });
       ext = 'mp4';
-      dbg('MP4 OK');
+      dbg('MP4 OK (bg)');
     } catch (e) {
-      dbg('MP4 falló');
+      dbg('MP4 falló (bg)');
       ext = state.chosenExtension;
     }
   }
-
-  if (bar) bar.style.width = '95%';
-  if (savingText) savingText.textContent = 'Guardando…';
-  if (savingSub) savingSub.textContent = 'Un último suspiro…';
-
-  let dbOk = false, totalCount = 0, filename = '';
   try {
     const now = new Date();
     const ts = tsStamp(now);
     const count = (await dbCount()) + 1;
-    filename = `confesion_${String(count).padStart(3,'0')}_${ts}${guestName ? '_' + safeName(guestName) : ''}.${ext}`;
+    const filename = `confesion_${String(count).padStart(3,'0')}_${ts}${guestName ? '_' + safeName(guestName) : ''}.${ext}`;
     await dbAdd({
       ts: now.getTime(), filename, ext,
       type: isVideo ? 'video' : 'audio',
       mime: finalBlob.type, size: finalBlob.size,
       guestName: guestName || null, blob: finalBlob,
     });
-    dbOk = true;
-    totalCount = await dbCount();
+    const totalCount = await dbCount();
     localStorage.setItem('confessionCount', totalCount.toString());
-    dbg('DB OK total=', totalCount);
-  } catch (e) { dbg('DB error'); }
-
-  if (settings.saveToGallery && filename) {
-    try { triggerDownload(finalBlob, filename); dbg('descarga disparada'); }
-    catch (dlErr) { dbg('descarga falló'); }
+    const setCount = $('setting-count');
+    if (setCount) setCount.textContent = totalCount;
+    dbg('DB OK (bg) total=', totalCount);
+    if (settings.saveToGallery) {
+      try { triggerDownload(finalBlob, filename); } catch {}
+    }
+  } catch (e) {
+    dbg('DB error (bg)', e?.message);
   }
-  if (bar) bar.style.width = '100%';
-
-  setTimeout(() => {
-    try {
-      goScreen('done');
-      const subtitle = $('done-subtitle');
-      if (subtitle) subtitle.textContent = guestName ? `Gracias, ${guestName} ✨` : '¡Gracias de corazón!';
-      const dateEl = $('done-signature-date');
-      if (dateEl) {
-        const d = new Date();
-        dateEl.textContent = d.toLocaleDateString('es-ES', { day:'numeric', month:'long', year:'numeric' });
-      }
-      const counter = $('msg-counter');
-      if (counter) counter.textContent = dbOk ? '' : 'Hubo un tropiezo al guardar, pero tu mensaje llegó.';
-      const setCount = $('setting-count');
-      if (setCount && totalCount) setCount.textContent = totalCount;
-      launchConfetti();
-      scheduleAutoReset();
-      const gn = $('guest-name');
-      if (gn) gn.value = '';
-    } catch (finalErr) { dbg('Error done:', finalErr?.message); goScreen('done'); }
-  }, 350);
 }
 
 function launchConfetti() {
@@ -596,16 +559,13 @@ function resetToWelcome() {
   $('progress-bar').style.width = '0%';
   $('timer').classList.remove('warning');
   setAudioOnly(false);
-  const logEl = $('recording-log');
-  if (logEl) { logEl.classList.remove('show'); logEl.textContent = ''; }
-  dbgLines.length = 0;
   applySettingsToUI();
   goScreen('welcome');
 }
 function scheduleAutoReset() {
   cancelAutoReset();
   if (!settings.autoReset) return;
-  const secs = Math.max(5, Number(settings.autoresetSecs) || 15);
+  const secs = Math.max(5, Number(settings.autoresetSecs) || 5);
   let remaining = secs;
   const autoEl = $('done-auto'), ring = $('done-auto-ring');
   if (ring) ring.classList.add('show');
@@ -682,7 +642,7 @@ function saveAndClose() {
     askName: $('setting-askname').checked,
     preview: $('setting-preview').checked,
     autoReset: $('setting-autoreset').checked,
-    autoresetSecs: clamp(parseInt($('setting-autoresetsecs').value, 10) || 15, 5, 300),
+    autoresetSecs: clamp(parseInt($('setting-autoresetsecs').value, 10) || 5, 5, 300),
     kiosk: $('setting-kiosk').checked,
     pin: newPin,
     mp4: $('setting-mp4').checked,
