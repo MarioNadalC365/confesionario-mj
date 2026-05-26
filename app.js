@@ -1,11 +1,12 @@
-/* EL CONFESIONARIO · Joaquín & Marta — app.js v5.3 (flujo silencioso, auto-reset 5s) */
+/* EL CONFESIONARIO · Joaquín & Marta — app.js v5.5
+   Solo vídeo (modo audio eliminado). Flujo silencioso, auto-reset 5s. */
 
 const state = {
   mediaStream: null, mediaRecorder: null, recordedChunks: [],
   lastBlob: null, lastExt: 'mp4',
   timerInterval: null, timeLeft: 30, isRecording: false,
   chosenMimeType: '', chosenExtension: '',
-  audioOnly: false, wakeLock: null,
+  wakeLock: null,
   autoResetTimer: null, autoResetCountdown: null,
   audioCtx: null, micAnalyser: null, micRAF: null,
   promptIndex: 0, pinInput: '',
@@ -142,7 +143,7 @@ function tsStamp(d) {
     String(d.getHours()).padStart(2,'0') + String(d.getMinutes()).padStart(2,'0') + String(d.getSeconds()).padStart(2,'0');
 }
 function safeName(s) {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
     .replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g,'').slice(0,30);
 }
 function humanSize(n) {
@@ -178,11 +179,6 @@ function detectFormat() {
   for (const mt of webm) if (MediaRecorder.isTypeSupported(mt)) { state.chosenMimeType=mt; state.chosenExtension='webm'; return; }
   state.chosenMimeType=''; state.chosenExtension='webm';
 }
-function detectAudioFormat() {
-  const types = ['audio/mp4;codecs=mp4a.40.2','audio/webm;codecs=opus','audio/webm','audio/mp4'];
-  for (const mt of types) if (MediaRecorder.isTypeSupported(mt)) return { mime: mt, ext: mt.includes('mp4')?'m4a':'webm' };
-  return { mime: '', ext: 'webm' };
-}
 
 async function acquireWakeLock() {
   try { if ('wakeLock' in navigator) state.wakeLock = await navigator.wakeLock.request('screen'); } catch {}
@@ -191,19 +187,6 @@ function releaseWakeLock() { try { state.wakeLock?.release(); } catch {} state.w
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && !state.wakeLock) acquireWakeLock();
 });
-
-function setAudioOnly(value) {
-  state.audioOnly = !!value;
-  const btn = $('audio-only-toggle');
-  if (btn) {
-    btn.classList.toggle('active', state.audioOnly);
-    btn.setAttribute('aria-pressed', String(state.audioOnly));
-    btn.innerHTML = state.audioOnly ? '🎙 <b>Modo audio ACTIVADO</b>' : '🎙 Solo audio (sin vídeo)';
-  }
-  const ind = $('audio-mode-indicator');
-  if (ind) ind.classList.toggle('hidden', !state.audioOnly);
-}
-function toggleAudioOnly() { setAudioOnly(!state.audioOnly); }
 
 async function requestPermissionAndContinue() {
   const errBanner = $('perm-error');
@@ -227,17 +210,13 @@ function describePermError(err) {
 }
 async function initCamera() {
   if (state.mediaStream) { state.mediaStream.getTracks().forEach(t => t.stop()); state.mediaStream = null; }
-  if (state.audioOnly) {
-    state.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-  } else {
-    const facingMode = settings.camera || 'user';
-    state.mediaStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true,
-    });
-    const video = $('preview-video');
-    video.srcObject = state.mediaStream;
-    video.classList.toggle('mirror', settings.mirror && facingMode === 'user');
-  }
+  const facingMode = settings.camera || 'user';
+  state.mediaStream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true,
+  });
+  const video = $('preview-video');
+  video.srcObject = state.mediaStream;
+  video.classList.toggle('mirror', settings.mirror && facingMode === 'user');
   setupMicMeter(state.mediaStream);
 }
 function setupMicMeter(stream) {
@@ -253,7 +232,6 @@ function setupMicMeter(stream) {
     state.micAnalyser = analyser;
     const buf = new Uint8Array(analyser.frequencyBinCount);
     const meterEl = $('mic-meter-fill');
-    const avPulse = $('av-pulse');
     const loop = () => {
       analyser.getByteTimeDomainData(buf);
       let sum = 0;
@@ -261,11 +239,6 @@ function setupMicMeter(stream) {
       const rms = Math.sqrt(sum / buf.length);
       const pct = Math.min(100, Math.round(rms * 260));
       if (meterEl) meterEl.style.height = pct + '%';
-      if (avPulse && state.audioOnly) {
-        const scale = 1 + rms * 2.5;
-        avPulse.style.transform = `scale(${scale})`;
-        avPulse.style.opacity = Math.min(0.9, rms * 2.5);
-      }
       state.micRAF = requestAnimationFrame(loop);
     };
     loop();
@@ -305,14 +278,11 @@ async function startCountdown() {
       return;
     }
   }
-  $('preview-video').style.display = state.audioOnly ? 'none' : '';
-  $('audio-visualizer').classList.toggle('show', state.audioOnly);
-  $('mic-meter').style.display = state.audioOnly ? 'none' : '';
   goScreen('countdown');
   await acquireWakeLock();
   const numEl = $('countdown-num');
   const labelEl = $('countdown-label');
-  labelEl.textContent = state.audioOnly ? 'Prepárate · Modo audio' : 'Prepárate…';
+  labelEl.textContent = 'Prepárate…';
   numEl.classList.remove('go');
   let count = 3;
   numEl.textContent = count; reAnim(numEl);
@@ -343,11 +313,7 @@ function startRecording() {
 
   let options = {};
   let ext = state.chosenExtension;
-  if (state.audioOnly) {
-    const af = detectAudioFormat();
-    if (af.mime) options.mimeType = af.mime;
-    ext = af.ext;
-  } else if (state.chosenMimeType) { options.mimeType = state.chosenMimeType; }
+  if (state.chosenMimeType) options.mimeType = state.chosenMimeType;
   state.lastExt = ext;
 
   try { state.mediaRecorder = new MediaRecorder(state.mediaStream, options); }
@@ -422,56 +388,39 @@ function bindStopHandlers() {
 function handleRecordingDone() {
   if (state.recordingDoneCalled) return;
   state.recordingDoneCalled = true;
-  const isAudioOnly = state.audioOnly;
-  const rawBlob = new Blob(state.recordedChunks, {
-    type: isAudioOnly ? (detectAudioFormat().mime || 'audio/webm') : (state.chosenMimeType || 'video/webm')
-  });
+  const rawBlob = new Blob(state.recordedChunks, { type: state.chosenMimeType || 'video/webm' });
   const guestName = ($('guest-name')?.value || '').trim();
   const extFallback = state.lastExt;
   if (settings.preview) { state.lastBlob = rawBlob; showPreview(rawBlob); return; }
   showDoneScreen(guestName);
-  saveInBackground(rawBlob, isAudioOnly, guestName, extFallback);
+  saveInBackground(rawBlob, guestName, extFallback);
 }
 
 function showPreview(blob) {
   if (state.playerObjectUrl) URL.revokeObjectURL(state.playerObjectUrl);
   state.playerObjectUrl = URL.createObjectURL(blob);
-  const vidC = $('preview-video-container');
-  const audC = $('preview-audio-container');
-  if (state.audioOnly) {
-    if (vidC) vidC.classList.add('hidden');
-    if (audC) audC.classList.remove('hidden');
-    const a = $('playback-audio');
-    a.src = state.playerObjectUrl; a.load(); a.play().catch(()=>{});
-  } else {
-    if (audC) audC.classList.add('hidden');
-    if (vidC) vidC.classList.remove('hidden');
-    const v = $('playback-video');
-    v.src = state.playerObjectUrl; v.load(); v.play().catch(()=>{});
-  }
+  const v = $('playback-video');
+  v.src = state.playerObjectUrl; v.load(); v.play().catch(()=>{});
   goScreen('preview');
   releaseWakeLock();
 }
 function rerecord() {
-  const v = $('playback-video'); const a = $('playback-audio');
+  const v = $('playback-video');
   try { v.pause(); v.removeAttribute('src'); v.load(); } catch {}
-  try { a.pause(); a.removeAttribute('src'); a.load(); } catch {}
   if (state.playerObjectUrl) { URL.revokeObjectURL(state.playerObjectUrl); state.playerObjectUrl = null; }
   state.lastBlob = null;
   initCamera().then(() => startCountdown())
     .catch(e => { toast(describePermError(e), 'error'); goScreen('welcome'); });
 }
 async function confirmSave() {
-  const v = $('playback-video'); const a = $('playback-audio');
+  const v = $('playback-video');
   try { v.pause(); v.removeAttribute('src'); v.load(); } catch {}
-  try { a.pause(); a.removeAttribute('src'); a.load(); } catch {}
   if (state.playerObjectUrl) { URL.revokeObjectURL(state.playerObjectUrl); state.playerObjectUrl = null; }
   if (!state.lastBlob) { resetToWelcome(); return; }
   const blob = state.lastBlob;
   const guestName = ($('guest-name')?.value || '').trim();
-  const isAudioOnly = state.audioOnly;
   showDoneScreen(guestName);
-  saveInBackground(blob, isAudioOnly, guestName, state.lastExt);
+  saveInBackground(blob, guestName, state.lastExt);
 }
 
 function showDoneScreen(guestName) {
@@ -491,11 +440,10 @@ function showDoneScreen(guestName) {
   if (gn) gn.value = '';
 }
 
-async function saveInBackground(rawBlob, isAudioOnly, guestName, extFallback) {
+async function saveInBackground(rawBlob, guestName, extFallback) {
   let finalBlob = rawBlob;
   let ext = extFallback;
-  const isVideo = !isAudioOnly;
-  if (isVideo && settings.mp4 && state.chosenExtension !== 'mp4') {
+  if (settings.mp4 && state.chosenExtension !== 'mp4') {
     try {
       const { FFmpeg } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/+esm');
       const { fetchFile } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/+esm');
@@ -522,7 +470,7 @@ async function saveInBackground(rawBlob, isAudioOnly, guestName, extFallback) {
     const filename = `confesion_${String(count).padStart(3,'0')}_${ts}${guestName ? '_' + safeName(guestName) : ''}.${ext}`;
     await dbAdd({
       ts: now.getTime(), filename, ext,
-      type: isVideo ? 'video' : 'audio',
+      type: 'video',
       mime: finalBlob.type, size: finalBlob.size,
       guestName: guestName || null, blob: finalBlob,
     });
@@ -558,7 +506,6 @@ function resetToWelcome() {
   cancelAutoReset();
   $('progress-bar').style.width = '0%';
   $('timer').classList.remove('warning');
-  setAudioOnly(false);
   applySettingsToUI();
   goScreen('welcome');
 }
@@ -898,7 +845,6 @@ function init() {
   rotatePrompts();
   detectFormat();
   applySettingsToUI();
-  setAudioOnly(false);
   bindStopHandlers();
   dbCount().then(n => { $('setting-count').textContent = n; localStorage.setItem('confessionCount', n.toString()); });
   spawnPetals();
